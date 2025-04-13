@@ -18,24 +18,25 @@ class stateMachineNode(Node):
             history=rclpy.qos.HistoryPolicy.KEEP_LAST,
             depth=1)
         
-        self.follower = self.create_subscription(
+        self.lineFollowerSub = self.create_subscription(
             Twist,
-            'followLineTop',
+            'follow_path_cmd',
             self.follower_callback,
             qos_profile=qos_policy)
         
-        self.obstacle = self.create_subscription(
+        self.obstacleSub = self.create_subscription(
             Bool,
-            'obstacleTop',
+            'obstacle_in_path',
             self.obstacle_callback,
             qos_profile=qos_policy)
         
         # prevent unused variable warning
-        self.follower
-        self.obstacle
+        self.lineFollowerSub
+        self.obstacleSub
 
         # status variables
         self.obstacleInPath = False
+        self.statusMessage = String()
 
         # publisher for state info
         self.status = self.create_publisher(String, 'status', 10)
@@ -52,7 +53,12 @@ class stateMachineNode(Node):
 
 
     def obstacle_callback(self, msg):
+        #set obstacle status
         self.obstacleInPath = msg.data
+
+        #announce status
+        self.statusMessage.data = "Obstacle in path" if msg.data else "Driving"
+        self.status.publish(self.statusMessage)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, stateMachineNode)
