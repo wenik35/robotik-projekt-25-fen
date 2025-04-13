@@ -13,20 +13,20 @@ from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 
-class followLineNode(rclpy.node.Node):
+class followPathNode(rclpy.node.Node):
 
     def __init__(self):
-        super().__init__('followLineNode')
+        super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('boundary_left', 0.6)
-        self.declare_parameter('boundary_right', 0.6)
+        self.declare_parameter('max_line_offset', 30)
+        self.declare_parameter('steering_quotient', 210)
+        self.declare_parameter('line_expected_at', 430)
         self.declare_parameter('speed_drive', 0.1)
         self.declare_parameter('speed_turn', 1.5)
 
-        # position of highest contrast
-        self.lineposition = 0.0
-        self.maxdiff = 0
+        # offset of highest contrast from where it is expected
+        self.line_offset = 0.0
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -45,7 +45,7 @@ class followLineNode(rclpy.node.Node):
         self.subscription  # prevent unused variable warning
 
         # create publisher for driving commands
-        self.publisher_ = self.create_publisher(Twist, 'followLineTop', 1)
+        self.publisher_ = self.create_publisher(Twist, 'follow_path_cmd', 1)
 
         # create timer to periodically invoke the driving logic
         timer_period = 0.5  # seconds
@@ -54,6 +54,7 @@ class followLineNode(rclpy.node.Node):
 
     # handling received image data
     def scanner_callback(self, data):
+        line_expect_at_param = self.get_parameter('line_expected_at').get_parameter_value().integer_value
 
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
@@ -67,7 +68,7 @@ class followLineNode(rclpy.node.Node):
         # get the lowest row from image
         img_row = img_gray[height-1,:]
 
-        # finding highest contrast
+        # finding highest contrast between 5 pixel steps
         max_diff = 0
         max_diff_index = 0
         for i in range(0, (len(img_row)-6), 5):
@@ -76,11 +77,8 @@ class followLineNode(rclpy.node.Node):
                 max_diff = diff
                 max_diff_index = i
 
-        half_length = len(img_row)/2        
-        self.maxdiff = max_diff
-
-        #normiert index so, dass er abhängig von mitte positiv oder negativ ist
-        self.lineposition = ((max_diff_index - half_length - 220) / half_length) * -1
+        # calculate offset of line from where it is expected
+        self.line_offset = max_diff_index - line_expect_at_param
 
         # visible image row
         img_row[max_diff_index] = 255
@@ -94,22 +92,21 @@ class followLineNode(rclpy.node.Node):
 
     # driving logic
     def timer_callback(self):
-
         # caching the parameters for reasons of clarity
-        boundary_left = self.get_parameter('boundary_left').get_parameter_value().double_value
-        boundary_right = self.get_parameter('boundary_right').get_parameter_value().double_value
+        max_offset = self.get_parameter('max_line_offset').get_parameter_value().integer_value
+        steering_quotient = self.get_parameter('steering_quotient').get_parameter_value().integer_value
         speed_drive = self.get_parameter('speed_drive').get_parameter_value().double_value
         speed_turn = self.get_parameter('speed_turn').get_parameter_value().double_value
 
-        # todo logic
-        speed = speed_drive
-        turn = 0.0
-        if (-boundary_right < self.lineposition < boundary_left):
-            turn = speed_turn * self.lineposition
+        # steer if found line is within boundary
+        if (abs(self.line_offset) < max_offset):
+            # self.line_offset has to be divided by a large number to make steering less jerky
+            # self.line_offset has to be multiplied by -1 to invert left/right
+            turn = speed_turn * (self.line_offset / steering_quotient) * -1
 
         # create message
         msg = Twist()
-        msg.linear.x = speed
+        msg.linear.x = speed_drive
         msg.angular.z = turn
 
         # send message
@@ -117,7 +114,7 @@ class followLineNode(rclpy.node.Node):
 
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, followLineNode)
+    spinUntilKeyboardInterrupt(args, followPathNode)
 
 
 if __name__ == '__main__':
