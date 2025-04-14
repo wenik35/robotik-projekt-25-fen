@@ -23,7 +23,7 @@ setup(
             'stateMachine = turtlebot_pastry._stateMachine:main',
             'stop = turtlebot_pastry._stop:main',
             'detectObstacle = turtlebot_pastry.detectObstacle:main',
-            'followLine = turtlebot_pastry.followLine:main',
+            'followPath = turtlebot_pastry.followPath:main',
 
         ],
     },

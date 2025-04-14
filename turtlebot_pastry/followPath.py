@@ -19,11 +19,10 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('max_line_offset', 30)
-        self.declare_parameter('steering_quotient', 210)
-        self.declare_parameter('line_expected_at', 430)
-        self.declare_parameter('speed_drive', 0.1)
-        self.declare_parameter('speed_turn', 1.5)
+        self.declare_parameter('max_line_offset', 300)
+        self.declare_parameter('steering_quotient', 20)
+        self.declare_parameter('line_expected_at', 600)
+        self.declare_parameter('speed_drive', 0.2)
 
         # offset of highest contrast from where it is expected
         self.line_offset = 0.0
@@ -59,16 +58,28 @@ class followPathNode(rclpy.node.Node):
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
 
-        # convert image to grayscale
-        img_gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-
         # get image size
-        height, width = img_gray.shape[:2]
+        height, width = img_cv.shape[:2]
+
+        # use cv2 edge detection
+        edged = cv2.Canny(img_cv, 75, 200)
 
         # get the lowest row from image
-        img_row = img_gray[height-1,:]
+        img_row = edged[height-1,:]
 
+        # line should be about 40px wide
         # finding highest contrast between 5 pixel steps
+        edge_indices = []
+        for i in range(int(len(img_row)/2), (len(img_row))):
+            if img_row[i] == 255:
+                edge_indices.append(i)
+
+        for i in range(0, len(edge_indices)-1):
+            if 30 < edge_indices[i+1] - edge_indices[i] < 50:
+                max_diff_index = edge_indices[i]
+
+
+        
         max_diff = 0
         max_diff_index = 0
         for i in range(0, (len(img_row)-6), 5):
@@ -80,13 +91,14 @@ class followPathNode(rclpy.node.Node):
         # calculate offset of line from where it is expected
         self.line_offset = max_diff_index - line_expect_at_param
 
-        # visible image row
-        img_row[max_diff_index] = 255
-        img_row_vis = np.repeat(img_row, 50).reshape(len(img_row), 50).swapaxes(0, 1)
+        og_img_row = edged[height-1,:]
+        #og_img_row[max_diff_index] = np.array([255,0,0])
+        img_row_vis = np.repeat(og_img_row, 50).reshape(len(og_img_row), 50).swapaxes(0, 1)
 
         # show image
-        cv2.imshow("IMG", img_gray)
-        cv2.imshow("IMG_ROW", img_row_vis)
+        cv2.imshow("IMG", img_cv)
+        cv2.imshow("edged", edged)
+        cv2.imshow("row", img_row_vis)
         cv2.waitKey(1)
 
 
@@ -96,13 +108,14 @@ class followPathNode(rclpy.node.Node):
         max_offset = self.get_parameter('max_line_offset').get_parameter_value().integer_value
         steering_quotient = self.get_parameter('steering_quotient').get_parameter_value().integer_value
         speed_drive = self.get_parameter('speed_drive').get_parameter_value().double_value
-        speed_turn = self.get_parameter('speed_turn').get_parameter_value().double_value
+
+        turn = 0.0
 
         # steer if found line is within boundary
         if (abs(self.line_offset) < max_offset):
             # self.line_offset has to be divided by a large number to make steering less jerky
             # self.line_offset has to be multiplied by -1 to invert left/right
-            turn = speed_turn * (self.line_offset / steering_quotient) * -1
+            turn = speed_drive * (self.line_offset / steering_quotient) * -1
 
         # create message
         msg = Twist()
