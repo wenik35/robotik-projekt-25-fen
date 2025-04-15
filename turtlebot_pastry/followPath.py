@@ -7,6 +7,7 @@ import rclpy
 import rclpy.node
 import cv2
 import numpy as np
+from matplotlib import pyplot as plt
 
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
@@ -20,9 +21,11 @@ class followPathNode(rclpy.node.Node):
 
         # definition of the parameters that can be changed at runtime
         self.declare_parameter('max_line_offset', 300)
-        self.declare_parameter('steering_quotient', 20)
-        self.declare_parameter('line_expected_at', 600)
-        self.declare_parameter('speed_drive', 0.2)
+        self.declare_parameter('steering_quotient', 10)
+        self.declare_parameter('line_expected_at', 550)
+        self.declare_parameter('speed_drive', 0.1)
+        self.declare_parameter('canny_high', 800)
+        self.declare_parameter('canny_low', 150)
 
         # offset of highest contrast from where it is expected
         self.line_offset = 0.0
@@ -47,13 +50,15 @@ class followPathNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Twist, 'follow_path_cmd', 1)
 
         # create timer to periodically invoke the driving logic
-        timer_period = 0.5  # seconds
+        timer_period = 0.1  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
 
     # handling received image data
     def scanner_callback(self, data):
         line_expect_at_param = self.get_parameter('line_expected_at').get_parameter_value().integer_value
+        canny_high = self.get_parameter('canny_high').get_parameter_value().integer_value
+        canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
 
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
@@ -62,45 +67,49 @@ class followPathNode(rclpy.node.Node):
         height, width = img_cv.shape[:2]
 
         # use cv2 edge detection
-        edged = cv2.Canny(img_cv, 75, 200)
+        edged = cv2.Canny(img_cv, canny_low, canny_high)
+        grayscale = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
 
         # get the lowest row from image
-        img_row = edged[height-1,:]
+        img_row = edged[height-5,:]
 
         # line should be about 40px wide
         # finding highest contrast between 5 pixel steps
         edge_indices = []
+        max_diff_index = 0
         for i in range(int(len(img_row)/2), (len(img_row))):
             if img_row[i] == 255:
                 edge_indices.append(i)
 
         for i in range(0, len(edge_indices)-1):
-            if 30 < edge_indices[i+1] - edge_indices[i] < 50:
+            # difference too small/big = not important line
+            # grayscalle under 130 = space between bigger lines
+            if 15 < (edge_indices[i+1] - edge_indices[i]) < 40 and grayscale[height-5, edge_indices[i]+5] > 100:
                 max_diff_index = edge_indices[i]
-
-
-        
-        max_diff = 0
-        max_diff_index = 0
-        for i in range(0, (len(img_row)-6), 5):
-            diff = abs(int(img_row[i+5]) - int(img_row[i]))
-            if diff > max_diff:
-                max_diff = diff
-                max_diff_index = i
+                break
+                
 
         # calculate offset of line from where it is expected
         self.line_offset = max_diff_index - line_expect_at_param
 
-        og_img_row = edged[height-1,:]
-        #og_img_row[max_diff_index] = np.array([255,0,0])
-        img_row_vis = np.repeat(og_img_row, 50).reshape(len(og_img_row), 50).swapaxes(0, 1)
+        # convert image to BGR for visualization and draw a dot where it expects the line
+        analyzer = cv2.cvtColor(img_row, cv2.COLOR_GRAY2BGR)
+        #for i in edge_indices:
+        #    analyzer[(i+30)%width] = np.array([0,255,0])
+        analyzer[max_diff_index] = np.array([0,0,255])
+        analyzer[(max_diff_index+10)%width] = np.array([0,255,0])
+        analyzer[(max_diff_index+40)%width] = np.array([0,255,0])
+
+        # resize and rotate image for better visualization
+        resized = cv2.resize(analyzer, (0,0), fx=50, fy=1) 
+        turned = cv2.rotate(resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # show image
         cv2.imshow("IMG", img_cv)
         cv2.imshow("edged", edged)
-        cv2.imshow("row", img_row_vis)
+        cv2.imshow("row", turned)
         cv2.waitKey(1)
-
+    
 
     # driving logic
     def timer_callback(self):
