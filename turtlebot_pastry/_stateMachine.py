@@ -12,6 +12,9 @@ class stateMachineNode(Node):
         #initialize 
         super().__init__('stateMachineNode')
 
+        # parameters
+        self.declare_parameter('force_stop', False)
+
         # setup laserscanner subscription
         qos_policy = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
@@ -45,7 +48,9 @@ class stateMachineNode(Node):
         self.cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
 
     def follower_callback(self, msg):
-        if(not self.obstacleInPath):
+        forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
+
+        if(not self.obstacleInPath and not forbid_driving):
             self.cmd_vel.publish(msg)
         else:
             stop = Twist()
