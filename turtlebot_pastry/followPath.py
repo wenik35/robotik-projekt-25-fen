@@ -23,8 +23,8 @@ class followPathNode(rclpy.node.Node):
         self.declare_parameter('max_line_offset', 300)
         self.declare_parameter('steering_quotient', 10)
         self.declare_parameter('line_expected_at', 550)
-        self.declare_parameter('speed_drive', 0.1)
-        self.declare_parameter('canny_high', 800)
+        self.declare_parameter('speed_drive', 0.15)
+        self.declare_parameter('canny_high', 600)
         self.declare_parameter('canny_low', 150)
 
         # offset of highest contrast from where it is expected
@@ -94,8 +94,6 @@ class followPathNode(rclpy.node.Node):
 
         # convert image to BGR for visualization and draw a dot where it expects the line
         analyzer = cv2.cvtColor(img_row, cv2.COLOR_GRAY2BGR)
-        #for i in edge_indices:
-        #    analyzer[(i+30)%width] = np.array([0,255,0])
         analyzer[max_diff_index] = np.array([0,0,255])
         analyzer[(max_diff_index+10)%width] = np.array([0,255,0])
         analyzer[(max_diff_index+40)%width] = np.array([0,255,0])

@@ -1,0 +1,1 @@
+"turtlebot_pastry" wird von Erik Langer, Felix Görg und Niklas Werner im Rahmen des Sommersemester-Moduls "Robotik-Projekt" an der TU Bergakademie Freiberg entwickelt.
