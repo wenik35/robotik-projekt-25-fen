@@ -12,7 +12,7 @@ from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 
 class detectObstacleNode(Node):
     def __init__(self):
-        #initialize 
+        #initialize
         super().__init__('detectObstacleNode')
 
         # definition of the parameters that can be changed at runtime
@@ -23,7 +23,7 @@ class detectObstacleNode(Node):
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
             history=rclpy.qos.HistoryPolicy.KEEP_LAST,
             depth=1)
-        
+
         self.subscription = self.create_subscription(
             LaserScan,
             'scan',

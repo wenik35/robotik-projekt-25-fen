@@ -98,6 +98,7 @@ class followPathNode(rclpy.node.Node):
         speed_drive = self.get_parameter('speed_drive').get_parameter_value().double_value
         speed_turn = self.get_parameter('speed_turn').get_parameter_value().double_value
 
+        turn = 0.0
         # steer if found line is within boundary
         if (abs(self.line_offset) < max_offset):
             # self.line_offset has to be divided by a large number to make steering less jerky

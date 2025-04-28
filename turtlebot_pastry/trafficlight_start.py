@@ -6,7 +6,8 @@ import numpy as np
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
-from tomlkit.items import Bool
+from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+
 import array
 
 class TrafficlightStartNode(rclpy.node.Node):
@@ -14,8 +15,8 @@ class TrafficlightStartNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('TrafficlightStartNode')
 
-        self.declare_parameter('lower_bound',(0,0,0)) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',(255,255,255))
+        self.declare_parameter('lower_bound',[24,232,144]) # TODO: figure out boundaries
+        self.declare_parameter('upper_bound',[53,249,240])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -38,8 +39,10 @@ class TrafficlightStartNode(rclpy.node.Node):
 
     def scanner_callback(self, data):
 
-        lower_bound = self.get_parameter('lower_bound').get_parameter_value().array
-        upper_bound = self.get_parameter('upper_bound').get_parameter_value().array
+        lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
+        lower_bound = np.array(lower_bound, dtype = "uint8")
+        upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
+        upper_bound = np.array(upper_bound, dtype = "uint8")
 
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
@@ -50,21 +53,19 @@ class TrafficlightStartNode(rclpy.node.Node):
         # find green
         mask = cv2.inRange(crop_img, lower_bound, upper_bound)
 
-        if max(mask) > 0:
-            print("Traffic light detected")
-            self.publisher_.publish(True)
+        if np.amax(mask) > 0:
+            out = Bool()
+            out.data = True
+            self.publisher_.publish(out)
             exit()
 
+        cv2.imshow("IMG", img_cv)
+        cv2.imshow("CROP", crop_img)
+        cv2.imshow("MASK", mask)
+        cv2.waitKey(1)
+
 def main(args=None):
-
-    rclpy.init(args=args)
-
-    node = TrafficlightStartNode
-
-    rclpy.spin(node)
-
-    node.destroy_node()
-    rclpy.shutdown()
+    spinUntilKeyboardInterrupt(args, TrafficlightStartNode)
 
 
 if __name__ == '__main__':
