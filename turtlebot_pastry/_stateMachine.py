@@ -43,6 +43,7 @@ class stateMachineNode(Node):
 
         # status variables
         self.allowedToDrive = False
+        self.greenLight = False
         self.statusMessage = String()
 
         # publisher for state info
@@ -52,9 +53,9 @@ class stateMachineNode(Node):
         self.cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
 
     def follower_callback(self, msg):
-        if(self.allowedToDrive):
+        if(self.allowedToDrive and self.greenLight):
             msg = msg
-            #self.cmd_vel.publish(msg)
+            self.cmd_vel.publish(msg)
         else:
             stop = Twist()
             #self.cmd_vel.publish(stop)
@@ -70,6 +71,7 @@ class stateMachineNode(Node):
 
     def trafficlight_callback(self, msg):
         self.allowedToDrive = msg.data
+        self.greenLight = msg.data
         self.statusMessage.data = "Driving"
         self.status.publish(self.statusMessage)
 

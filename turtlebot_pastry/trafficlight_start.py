@@ -15,8 +15,8 @@ class TrafficlightStartNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('TrafficlightStartNode')
 
-        self.declare_parameter('lower_bound',[24,232,144]) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',[53,249,240])
+        self.declare_parameter('lower_bound',[55,90,0]) # TODO: figure out boundaries [10,180,135]
+        self.declare_parameter('upper_bound',[65,100,15])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -48,7 +48,7 @@ class TrafficlightStartNode(rclpy.node.Node):
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
 
         # cropping image
-        crop_img = img_cv[:][128:][:] # TODO: Optimnize cropping
+        crop_img = img_cv[50:][150:300][:] # TODO: Optimnize cropping
 
         # find green
         mask = cv2.inRange(crop_img, lower_bound, upper_bound)
@@ -58,7 +58,9 @@ class TrafficlightStartNode(rclpy.node.Node):
             out.data = True
             self.publisher_.publish(out)
             exit()
-
+        out = Bool()
+        out.data = False
+        self.publisher_.publish(out)
         cv2.imshow("IMG", img_cv)
         cv2.imshow("CROP", crop_img)
         cv2.imshow("MASK", mask)
