@@ -4,9 +4,11 @@ simple line following node
 
 import sys
 import rclpy
-import rclpy.node
 import cv2
 import numpy as np
+
+from rclpy.node import Node 
+from rcl_interfaces.msg import SetParametersResult
 from matplotlib import pyplot as plt
 
 from geometry_msgs.msg import Twist
@@ -20,12 +22,21 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('max_line_offset', 300)
-        self.declare_parameter('steering_quotient', 10)
-        self.declare_parameter('line_expected_at', 550)
-        self.declare_parameter('speed_drive', 0.15)
-        self.declare_parameter('canny_high', 600)
-        self.declare_parameter('canny_low', 150)
+        self.params = {
+            'max_line_offset': 300,
+            'steering_quotient': 10,
+            'line_expected_at': 550,
+            'speed_drive': 0.15,
+            'canny_high': 600,
+            'canny_low': 150 }
+        
+        for param_name, default_value in self.params.items():
+            self.declare_parameter(param_name, default_value)
+
+        for param_name in self.params.keys():
+            self.params[param_name] = self.get_parameter(param_name).value
+
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
         # offset of highest contrast from where it is expected
         self.line_offset = 0.0
@@ -53,7 +64,16 @@ class followPathNode(rclpy.node.Node):
         timer_period = 0.1  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
-
+    def parameter_callback(self, params):
+        succ = True
+        for param in params:
+            if param.name in self.params:
+                self.params[param.name] = param.value
+                self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+            else:
+                succ = False
+        return SetParametersResult(successful = succ)
+    
     # handling received image data
     def scanner_callback(self, data):
         line_expect_at_param = self.get_parameter('line_expected_at').get_parameter_value().integer_value
