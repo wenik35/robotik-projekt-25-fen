@@ -6,7 +6,8 @@ import numpy as np
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
-from tomlkit.items import Bool
+from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+
 import array
 
 class TrafficlightStartNode(rclpy.node.Node):
@@ -14,8 +15,8 @@ class TrafficlightStartNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('TrafficlightStartNode')
 
-        self.declare_parameter('lower_bound',(0,0,0)) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',(255,255,255))
+        self.declare_parameter('lower_bound',[55,90,0]) # TODO: figure out boundaries [10,180,135]
+        self.declare_parameter('upper_bound',[65,100,15])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -35,36 +36,41 @@ class TrafficlightStartNode(rclpy.node.Node):
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Bool, 'GreenLight', 1)
+        self.active = True
 
     def scanner_callback(self, data):
+        if self.active:
+            lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
+            lower_bound = np.array(lower_bound, dtype = "uint8")
+            upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
+            upper_bound = np.array(upper_bound, dtype = "uint8")
 
-        lower_bound = self.get_parameter('lower_bound').get_parameter_value().array
-        upper_bound = self.get_parameter('upper_bound').get_parameter_value().array
+            # convert message to opencv image
+            img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
 
-        # convert message to opencv image
-        img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
+            # cropping image
+            crop_img = img_cv[50:][150:300][:] # TODO: Optimnize cropping
 
-        # cropping image
-        crop_img = img_cv[:][128:][:] # TODO: Optimnize cropping
+            # find green
+            mask = cv2.inRange(crop_img, lower_bound, upper_bound)
 
-        # find green
-        mask = cv2.inRange(crop_img, lower_bound, upper_bound)
-
-        if max(mask) > 0:
-            print("Traffic light detected")
-            self.publisher_.publish(True)
-            exit()
+            if np.amax(mask) > 0:
+                out = Bool()
+                out.data = True
+                self.publisher_.publish(out)
+                self.active = False
+                # exit()
+            else:
+                out = Bool()
+                out.data = False
+                self.publisher_.publish(out)
+        cv2.imshow("IMG", img_cv)
+        cv2.imshow("CROP", crop_img)
+        cv2.imshow("MASK", mask)
+        cv2.waitKey(1)
 
 def main(args=None):
-
-    rclpy.init(args=args)
-
-    node = TrafficlightStartNode
-
-    rclpy.spin(node)
-
-    node.destroy_node()
-    rclpy.shutdown()
+    spinUntilKeyboardInterrupt(args, TrafficlightStartNode)
 
 
 if __name__ == '__main__':

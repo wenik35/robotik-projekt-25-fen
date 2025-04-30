@@ -87,7 +87,6 @@ class followPathNode(rclpy.node.Node):
             if 15 < (edge_indices[i+1] - edge_indices[i]) < 40 and grayscale[height-5, edge_indices[i]+5] > 100:
                 max_diff_index = edge_indices[i]
                 break
-                
 
         # calculate offset of line from where it is expected
         self.line_offset = max_diff_index - line_expect_at_param
@@ -99,7 +98,7 @@ class followPathNode(rclpy.node.Node):
         analyzer[(max_diff_index+40)%width] = np.array([0,255,0])
 
         # resize and rotate image for better visualization
-        resized = cv2.resize(analyzer, (0,0), fx=50, fy=1) 
+        resized = cv2.resize(analyzer, (0,0), fx=50, fy=1)
         turned = cv2.rotate(resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # show image
