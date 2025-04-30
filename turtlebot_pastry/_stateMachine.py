@@ -58,7 +58,7 @@ class stateMachineNode(Node):
             self.cmd_vel.publish(msg)
         else:
             stop = Twist()
-            #self.cmd_vel.publish(stop)
+            self.cmd_vel.publish(stop)
 
 
     def obstacle_callback(self, msg):
