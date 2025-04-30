@@ -4,7 +4,11 @@ Following node
 
 import rclpy
 import rclpy.context
-from rclpy.node import Node
+
+from rclpy.node import Node 
+from rcl_interfaces.msg import SetParametersResult
+
+from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
@@ -16,7 +20,16 @@ class detectObstacleNode(Node):
         super().__init__('detectObstacleNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('detection_distance', 0.35)
+        self.params = {
+            'detection_distance' : 0.35 }
+
+        for param_name, default_value in self.params.items():
+            self.declare_parameter(param_name, default_value)
+
+        for param_name in self.params.keys():
+            self.params[param_name] = self.get_parameter(param_name).value
+
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
         # setup laserscanner subscription
         qos_policy = rclpy.qos.QoSProfile(
@@ -36,6 +49,15 @@ class detectObstacleNode(Node):
 
         # status
         self.obstacleDetected = True
+    def parameter_callback(self, params):
+        succ = True
+        for param in params:
+            if param.name in self.params:
+                self.params[param.name] = param.value
+                self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+            else:
+                succ = False
+        return SetParametersResult(successful = succ)
 
     def scanner_callback(self, msg):
         # caching the parameters for clarity

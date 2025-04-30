@@ -3,6 +3,8 @@ import rclpy.node
 import cv2
 import numpy as np
 
+from rclpy.node import Node 
+from rcl_interfaces.msg import SetParametersResult
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
@@ -14,8 +16,18 @@ class TrafficlightStartNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('TrafficlightStartNode')
 
-        self.declare_parameter('lower_bound',(0,0,0)) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',(255,255,255))
+        self.params = {
+            'lower_bound' :(0,0,0),
+            'upper_bound' : (255,255,255) }
+
+        for param_name, default_value in self.params.items():
+            self.declare_parameter(param_name, default_value)
+
+        for param_name in self.params.keys():
+            self.params[param_name] = self.get_parameter(param_name).value
+
+        self.add_on_set_parameters_callback(self.parameter_callback)
+
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -35,6 +47,15 @@ class TrafficlightStartNode(rclpy.node.Node):
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Bool, 'GreenLight', 1)
+    def parameter_callback(self, params):
+        succ = True
+        for param in params:
+            if param.name in self.params:
+                self.params[param.name] = param.value
+                self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+            else:
+                succ = False
+        return SetParametersResult(successful = succ)
 
     def scanner_callback(self, data):
 
