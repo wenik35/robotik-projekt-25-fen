@@ -88,7 +88,6 @@ class followPathNode(rclpy.node.Node):
                 max_diff_index = edge_indices[i]
                 break
 
-
         # calculate offset of line from where it is expected
         self.line_offset = max_diff_index - line_expect_at_param
 
@@ -107,7 +106,7 @@ class followPathNode(rclpy.node.Node):
         cv2.imshow("edged", edged)
         cv2.imshow("row", turned)
         cv2.waitKey(1)
-
+    
 
     # driving logic
     def timer_callback(self):

@@ -43,9 +43,11 @@ class detectObstacleNode(Node):
 
         # detection
         detection = msg.ranges[0] < distance_turn_param
-
+        
         # message
         if (detection != self.obstacleDetected):
+            self.obstacleDetected = detection
+
             out = Bool()
             out.data = detection
 
