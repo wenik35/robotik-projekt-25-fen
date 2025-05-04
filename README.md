@@ -30,8 +30,16 @@ colcon build --packages-select turtlebot_pastry
 In einem neuen Terminal (im root des Workspaces) kann jetzt das Package gesourcet und ausgeführt werden:
 ```
 source install/setup.bash
+```
+und dann
+```
+ros2 launch turtlebot_pastry TrafficLightLaunch.py
+```
+um alle Nodes zu starten, oder
+```
 ros2 launch turtlebot_pastry latest.py
 ```
+um alle Nodes außer trafficlight zu starten.
 
 ---
 
