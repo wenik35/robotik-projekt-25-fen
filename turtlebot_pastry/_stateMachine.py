@@ -21,16 +21,10 @@ class stateMachineNode(Node):
             history=rclpy.qos.HistoryPolicy.KEEP_LAST,
             depth=1)
 
-        self.lineFollowerSub = self.create_subscription(
+        self.laneFollowerSub = self.create_subscription(
             Twist,
             'follow_path_cmd',
-            self.follower_callback,
-            qos_profile=qos_policy)
-
-        self.obstacleSub = self.create_subscription(
-            Bool,
-            'obstacle_in_path',
-            self.obstacle_callback,
+            self.lane_follower_callback,
             qos_profile=qos_policy)
 
         self.trafficlightSub = self.create_subscription(
@@ -39,13 +33,20 @@ class stateMachineNode(Node):
             self.trafficlight_callback,
             qos_profile=qos_policy)
 
-        # prevent unused variable warning
-        self.lineFollowerSub
-        self.obstacleSub
-        self.trafficlightSub
+        self.laneChangeNoticeSub = self.create_subscription(
+            Bool,
+            'lane_change_in_process',
+            self.lane_change_notice_callback,
+            qos_profile=qos_policy)
+
+        self.laneChangeCommandSub = self.create_subscription(
+            Twist,
+            'change_lane_cmd',
+            self.lane_changer_callback,
+            qos_profile=qos_policy)
 
         # status variables
-        self.allowedToDrive = False
+        self.changingLane = False
         self.greenLight = False
         self.statusMessage = String()
 
@@ -55,30 +56,29 @@ class stateMachineNode(Node):
         # publisher for driving commands
         self.cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
 
-    def follower_callback(self, msg):
-
+    def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
-        if(self.allowedToDrive and self.greenLight and not forbid_driving)):
-            msg = msg
+
+        if(not self.changingLane and self.greenLight and not forbid_driving):
             self.cmd_vel.publish(msg)
-        else:
-            stop = Twist()
-            self.cmd_vel.publish(stop)
-
-
-    def obstacle_callback(self, msg):
-        #set obstacle status
-        self.allowedToDrive = not msg.data
-
-        #announce status
-        self.statusMessage.data = "Obstacle in path" if msg.data else "Driving"
-        self.status.publish(self.statusMessage)
 
     def trafficlight_callback(self, msg):
-        self.allowedToDrive = msg.data
         self.greenLight = msg.data
         self.statusMessage.data = "Driving"
         self.status.publish(self.statusMessage)
+
+    def lane_change_notice_callback(self, msg):
+        self.changingLane = msg.data
+
+        #announce status
+        self.statusMessage.data = "Changing lane" if msg.data else "Driving in lane"
+        self.status.publish(self.statusMessage)
+
+    def lane_changer_callback(self, msg):
+        forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
+
+        if (self.changingLane and self.greenLight and not forbid_driving):
+            self.cmd_vel.publish(msg)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, stateMachineNode)

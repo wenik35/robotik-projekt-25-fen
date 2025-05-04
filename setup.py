@@ -22,9 +22,11 @@ setup(
         'console_scripts': [
             'stateMachine = turtlebot_pastry._stateMachine:main',
             'stop = turtlebot_pastry._stop:main',
-            'detectObstacle = turtlebot_pastry.detectObstacle:main',
+            'changeLaneAtObstacle = turtlebot_pastry.changeLaneAtObstacle:main',
             'followPath = turtlebot_pastry.followPath:main',
-            'trafficlight_start = turtlebot_pastry.trafficlight_start:main'
+            'trafficlight_start = turtlebot_pastry.trafficlight_start:main',
+            'imageProcessing = turtlebot_pastry._imageProcessing:main',
+            'changeLane = turtlebot_pastry.changeLane:main',
 
         ],
     },
