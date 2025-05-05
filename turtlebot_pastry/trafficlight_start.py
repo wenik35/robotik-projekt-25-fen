@@ -64,10 +64,10 @@ class TrafficlightStartNode(rclpy.node.Node):
                 out = Bool()
                 out.data = False
                 self.publisher_.publish(out)
-        cv2.imshow("IMG", img_cv)
-        cv2.imshow("CROP", crop_img)
-        cv2.imshow("MASK", mask)
-        cv2.waitKey(1)
+        #cv2.imshow("IMG", img_cv)
+        #cv2.imshow("CROP", crop_img)
+        #cv2.imshow("MASK", mask)
+        #cv2.waitKey(1)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, TrafficlightStartNode)

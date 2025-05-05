@@ -7,21 +7,24 @@ def generate_launch_description():
             package='turtlebot_pastry',
             executable='stateMachine',
             name='stateMachine',
-            output='screen',
-            arguments=['--ros-args', '--log-level', 'INFO']
+            output='screen'
         ),
         Node(
             package='turtlebot_pastry',
-            executable='detectObstacle',
-            name='detectObstacle',
-            output='screen',
-            arguments=['--ros-args', '--log-level', 'INFO']
+            executable='changeLaneAtObstacle',
+            name='changeLaneAtObstacle',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='imageProcessing',
+            name='imageProcessing',
+            output='screen'
         ),
         Node(
             package='turtlebot_pastry',
             executable='followPath',
             name='followPath',
-            output='screen',
-            arguments=['--ros-args', '--log-level', 'INFO']
+            output='screen'
         ),
     ])
