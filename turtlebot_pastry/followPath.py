@@ -46,21 +46,22 @@ class followPathNode(rclpy.node.Node):
         steering_quotient = self.get_parameter('steering_quotient').get_parameter_value().integer_value
         speed_drive = self.get_parameter('speed_drive').get_parameter_value().double_value
 
+        line_offset = msg.data
         turn = 0.0
 
         # steer if found line is within boundary
-        if (abs(msg.data) < max_offset):
+        if (abs(line_offset) < max_offset):
             # self.line_offset has to be divided by a large number to make steering less jerky
             # self.line_offset has to be multiplied by -1 to invert left/right
-            turn = speed_drive * (self.line_offset / steering_quotient) * -1
+            turn = speed_drive * (line_offset / steering_quotient) * -1
 
-        # create message
-        msg = Twist()
-        msg.linear.x = speed_drive
-        msg.angular.z = turn
+            # create message
+            msg = Twist()
+            msg.linear.x = speed_drive
+            msg.angular.z = turn
 
-        # send message
-        self.publisher_.publish(msg)
+            # send message
+            self.publisher_.publish(msg)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, followPathNode)

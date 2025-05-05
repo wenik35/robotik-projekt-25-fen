@@ -73,7 +73,8 @@ class imageProcessingNode(rclpy.node.Node):
         visual_lines = display_lines(final_to_color, lines, (255, 0, 0))
         lanes = cv2.addWeighted(final_to_color, 0.8, visual_lines, 1, 10)
 
-        boundary_lines = detect_boundary(edged, lines)
+        #boundary_lines = detect_boundary(edged, lines)
+        boundary_lines = None
         if boundary_lines is not None:
             boundary_message = String()
             boundary_message.data = "Boundary detected"
@@ -132,7 +133,7 @@ def detect_boundary(image, lines):
             parameters = np.polyfit((x1, x2), (y1, y2), 1)
             slope = parameters[0]
             y_int = parameters[1]
-            if -0.05 < slope < 0.05 and 230 < y_int < 240:
+            if -0.05 < slope < 0.05 and 200 < y_int < 240:
                 polys.append((slope, y_int))
 
     bound_lines = make_points(image, polys)

@@ -13,7 +13,7 @@ class stateMachineNode(Node):
         super().__init__('stateMachineNode')
 
         # parameters
-        self.declare_parameter('force_stop', True)
+        self.declare_parameter('force_stop', False)
 
         # setup laserscanner subscription
         qos_policy = rclpy.qos.QoSProfile(
@@ -47,7 +47,7 @@ class stateMachineNode(Node):
 
         # status variables
         self.changingLane = False
-        self.greenLight = False
+        self.greenLight = True
         self.statusMessage = String()
 
         # publisher for state info
@@ -59,7 +59,7 @@ class stateMachineNode(Node):
     def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
-        if(not self.changingLane and self.greenLight and not forbid_driving):
+        if((not self.changingLane) and self.greenLight and (not forbid_driving)):
             self.cmd_vel.publish(msg)
 
     def trafficlight_callback(self, msg):

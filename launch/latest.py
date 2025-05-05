@@ -5,12 +5,6 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='turtlebot_pastry',
-            executable='trafficlight_start',
-            name='trafficlight_start',
-            output='screen'
-        ),
-        Node(
-            package='turtlebot_pastry',
             executable='stateMachine',
             name='stateMachine',
             output='screen'
@@ -25,6 +19,12 @@ def generate_launch_description():
             package='turtlebot_pastry',
             executable='imageProcessing',
             name='imageProcessing',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='followPath',
+            name='followPath',
             output='screen'
         ),
     ])
