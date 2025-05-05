@@ -35,13 +35,6 @@ class changeLaneNode(Node):
             qos_profile=qos_policy)
         self.laser_scanner_sub  # prevent unused variable warning
 
-        self.boundary_sub = self.create_subscription(
-            String,
-            'boundary_detected',
-            self.boundary_callback,
-            qos_profile=qos_policy)
-        self.boundary_sub
-
         self.follow_line_sub = self.create_subscription(
             Twist,
             'follow_path_cmd',
@@ -77,9 +70,8 @@ class changeLaneNode(Node):
 
         if self.status == "Driving left":
             if (self.lastDistanceRight != float("inf")):
-                right_detection = 0.4 < msg.ranges[540] - self.lastDistanceRight 
-                self.get_logger().info(f"Right detection: {msg.ranges[540]}, Last detection: {self.lastDistanceRight}")
-                sleep(0.5)
+                right_detection = 0.4 < msg.ranges[540] - self.lastDistanceRight
+                sleep(1)
                 
                 # message
                 if (right_detection):
@@ -93,11 +85,6 @@ class changeLaneNode(Node):
 
     def follow_line_callback(self, msg):
         self.last_path_cmd = msg
-
-
-    def boundary_callback(self, msg):
-        if self.status == "Awaiting boundary":
-            self.status = "Boundary detected"
     
     def changeLane(self, toLeft: bool):
         self.turn90Deg(toLeft)
@@ -114,7 +101,7 @@ class changeLaneNode(Node):
         self.notice_publisher.publish(self.laneChange)
 
         # give control to lane follower for 1 second to get beside obstacle
-        sleep(1)
+        sleep(1.5)
 
         # stop, give back control to lane follower
         self.status = "Driving left" if toLeft else "Driving right"
@@ -132,13 +119,6 @@ class changeLaneNode(Node):
 
         # stop
         self.command_publisher.publish(cached_cmd)
-        
-
-class odomTracker():
-    def __init__(self):
-        self.x = 0.0
-        self.y = 0.0
-        self.yaw = 0.0
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, changeLaneNode)
