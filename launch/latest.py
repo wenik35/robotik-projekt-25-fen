@@ -24,4 +24,11 @@ def generate_launch_description():
             output='screen',
             arguments=['--ros-args', '--log-level', 'INFO']
         ),
+        Node(
+            package='turtlebot_pastry',
+            executable='signRecognition',
+            name='signRecognition',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
     ])

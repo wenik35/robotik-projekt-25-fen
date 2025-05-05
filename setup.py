@@ -25,6 +25,7 @@ setup(
             'detectObstacle = turtlebot_pastry.detectObstacle:main',
             'followPath = turtlebot_pastry.followPath:main',
             'trafficlight_start = turtlebot_pastry.trafficlight_start:main'
+            'signRecognition = turtlebot_pastry.signRecognition:main'
 
         ],
     },
