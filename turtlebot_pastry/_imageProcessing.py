@@ -23,6 +23,9 @@ class imageProcessingNode(rclpy.node.Node):
         self.declare_parameter('line_expected_at', 550)
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
+        self.declare_parameter('threshold', 50)
+        self.declare_parameter('minLineLength', 10)
+        self.declare_parameter('maxLineGap', 5)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -49,11 +52,16 @@ class imageProcessingNode(rclpy.node.Node):
         canny_high = self.get_parameter('canny_high').get_parameter_value().integer_value
         canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
 
+        threshold = self.get_parameter('threshold').get_parameter_value().integer_value
+        minLineLength = self.get_parameter('minLineLength').get_parameter_value().integer_value
+        maxLineGap = self.get_parameter('maxLineGap').get_parameter_value().integer_value
+
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
 
         # cut upper (uninteresting) half out
-        cut_img = img_cv[img_cv.shape[0]//2:img_cv.shape[0], 0:img_cv.shape[1]]
+        height, width = img_cv.shape[:2]
+        cut_img = img_cv[height-height//3:height, 0:width]
 
         # warp image to birds eye view
         #warped = warp(cut_img)
@@ -67,31 +75,38 @@ class imageProcessingNode(rclpy.node.Node):
         self.line_offset.publish(offset)
 
         masked = region(edged)
-        lines = cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=100, minLineLength=40, maxLineGap=5)
+        edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
-        final_to_color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
-        visual_lines = display_lines(final_to_color, lines, (255, 0, 0))
-        lanes = cv2.addWeighted(final_to_color, 0.8, visual_lines, 1, 10)
+        lines = cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap)
+        visual_lines = display_lines(edged2color, lines, (255, 0, 0))
+        lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
-        #boundary_lines = detect_boundary(edged, lines)
-        boundary_lines = None
+        averaged_lines = average(cut_img, lines)
+        display_averaged_lines = display_lines(edged2color, averaged_lines, (0, 255, 0))
+        lanes = cv2.addWeighted(edged2color, 0.8, display_averaged_lines, 1, 10)
+
+        '''
+        boundary_lines = detect_boundary(edged, lines)
         if boundary_lines is not None:
             boundary_message = String()
             boundary_message.data = "Boundary detected"
             self.boundary_detected.publish(boundary_message)
 
-            boundary_display_lines = display_lines(final_to_color, boundary_lines, (0, 255, 0))
+            boundary_display_lines = display_lines(edged2color, boundary_lines, (0, 255, 0))
             lanes = cv2.addWeighted(boundary_display_lines, 0.8, lanes, 1, 10)
+        '''
+
+        masked_color = cv2.cvtColor(masked, cv2.COLOR_GRAY2BGR)
+
+        images = np.concatenate((cut_img, masked_color, lines_img, lanes), axis=0)
 
         # show image
-        cv2.imshow("original", cut_img)
-        cv2.imshow("edged+masked", masked)
-        cv2.imshow("lanes", lanes)
+        cv2.imshow("images", images)
         cv2.waitKey(1)
 
 def region(image):
     height, width = image.shape[:2]
-    trapezoid = np.array([[0.24*width, 0], [width - 0.24*width, 0], [width, height], [0, height]], np.int32)
+    trapezoid = np.array([[0.3*width, 0], [width - 0.3*width, 0], [width, height], [0, height]], np.int32)
 
     mask = np.zeros_like(image)
     
@@ -102,7 +117,7 @@ def region(image):
 def warp(image):
     height, width = image.shape[:2]
 
-    src = np.float32([[width*0.42, 0], [width*0.54, 0], [width, height], [0, height]]) # The source points
+    src = np.float32([[width*0.5, 0],  [width, height], [0, height]]) # The source points
     dst = np.float32([[0, 0], [width, 0], [width, height], [0, height]]) # The destination points
     transformation_matrix = cv2.getPerspectiveTransform(src, dst) # The transformation matrix
 
@@ -116,11 +131,12 @@ def display_lines(image, lines, color):
     if lines is not None:
         for line in lines:
             try:
+                #color = (0, 0, 255) if (line_angle(line[0]) > 45) else (255, 0, 0)
                 x1, y1, x2, y2 = line[0]
                 cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
             except Exception as e:
                 print("Error in display_lines: ", e)
-                print(line[0])
+                print(line)
                 continue
 
     return lines_image
@@ -139,18 +155,59 @@ def detect_boundary(image, lines):
     bound_lines = make_points(image, polys)
     return np.array(bound_lines)
     
-def make_points(image, lines):
-    point_arrays = []
+def average(image, lines):
+    left = []
+    right = []
     if lines is not None:
         for line in lines:
-            slope, y_int = line 
-            if not (slope == 0.0):
-                y1 = image.shape[0]
-                y2 = int(y1 * (3/5))
-                x1 = int((y1 - y_int) // slope)
-                x2 = int((y2 - y_int) // slope)
-                point_arrays.append([[x1, y1, x2, y2]])
+            x1, y1, x2, y2 = line[0].reshape(4)
+            parameters = np.polyfit((x1, x2), (y1, y2), 1)
+            slope = parameters[0]
+            y_int = parameters[1]
+            if slope < 0:
+                left.append((slope, y_int))
+            else:
+                right.append((slope, y_int))
+    
+    right_avg = np.average(right, axis=0)
+    left_avg = np.average(left, axis=0)
+    left_line = make_points(image, [left_avg])
+    right_line = make_points(image, [right_avg])
+    return np.array([left_line, right_line])
+
+def make_points(image, lines):
+    point_arrays = []
+    print(lines)
+    if lines is not None:
+        for line in lines:
+            try:
+                slope, y_int = line 
+                if not (slope == 0.0):
+                    y1 = image.shape[0]
+                    y2 = int(y1 * (3/5))
+                    x1 = int((y1 - y_int) // slope)
+                    x2 = int((y2 - y_int) // slope)
+                    point_arrays.append([x1, y1, x2, y2])
+            except Exception as e:
+                print("Error in make_points: ", e)
+                print(line)
+                continue
     return point_arrays
+
+def line_angle(line):
+    x1, y1, x2, y2 = line
+    dx = x2 - x1
+    dy = y2 - y1
+    vector = np.array([dx, dy])
+
+    return vector_angle(vector, np.array([1, 0]))
+
+def vector_angle(v1, v2):
+    unit_v1 = v1 / np.linalg.norm(v1)
+    unit_v2 = v2 / np.linalg.norm(v2)
+
+    angle = np.arccos(np.clip(np.dot(unit_v1, unit_v2), -1.0, 1.0))
+    return np.rad2deg(angle)
 
 
 def analyseImageRow(edged, grayscale, line_expected_at):

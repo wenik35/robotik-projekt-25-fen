@@ -5,11 +5,9 @@ Following node
 import rclpy
 from rclpy.node import Node
 from time import sleep
-from numpy import array
 
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
-from std_msgs.msg import String, Bool
+from std_msgs.msg import Bool
 from geometry_msgs.msg import Twist
 
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
