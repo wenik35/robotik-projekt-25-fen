@@ -30,12 +30,12 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         # create subscribers for image data with changed qos
-        #self.subscription = self.create_subscription(
-        #    CompressedImage,
-        #    '/image_raw/compressed',
-        #    self.scanner_callback,
-        #    qos_profile=qos_policy)
-        #self.subscription  # prevent unused variable warning
+        self.subscription = self.create_subscription(
+            CompressedImage,
+            '/image_raw/compressed',
+            self.scanner_callback,
+            qos_profile=qos_policy)
+        self.subscription  # prevent unused variable warning
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Bool, 'GreenLight', 1)
@@ -43,7 +43,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         image_list = []
         image_list.append(cv2.imread("./Media/GoStraight.png"))
-        image_list.append(cv2.imread("./Media/Parkplatz.png"))
+        image_list.append(cv2.imread("./Media/ParkPlatz.png"))
         image_list.append(cv2.imread("./Media/TurnLeft.png"))
         image_list.append(cv2.imread("./Media/TurnRight.png"))
         image_list.append(cv2.imread("./Media/ZebraStreifen.png"))
@@ -63,56 +63,57 @@ class SignRecognitionNode(rclpy.node.Node):
 
 
     def scanner_callback(self, data):
-        print(-1)
-        #lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
-        #lower_bound = np.array(lower_bound, dtype = "uint8")
-        #upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
-        #upper_bound = np.array(upper_bound, dtype = "uint8")
+
+        lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
+        lower_bound = np.array(lower_bound, dtype = "uint8")
+        upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
+        upper_bound = np.array(upper_bound, dtype = "uint8")
 
         # convert message to opencv image
-        #img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
-        #cv2.imshow("IMG", img_cv)
-        print(0)
+        img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
+        cv2.imshow("IMG", img_cv)
 
-        img_cv = cv2.imread("Media/CropTest100.png", cv2.IMREAD.COLOR)
         # cropping image
-        mask = img_cv[50:][150:300][:] # TODO: Optimize cropping
+        crop_img = img_cv[50:][100:300][:] # TODO: Optimize cropping
 
         # find blue
-        # mask = cv2.inRange(crop_img, lower_bound, upper_bound)
+        mask = cv2.inRange(crop_img, lower_bound, upper_bound)
         crop_up = 0
         crop_down = mask.shape[0]
         crop_left = 0
         crop_right = mask.shape[1]
+        print(mask.shape[0])
+        print(mask.shape[1])
 
         for i in range (mask.shape[0]):
             print(i)
             if(np.max(mask[i]) > 0):
                 crop_up = i
                 break
-        
-        for i in range (mask.shape[0], 0, -1):
+
+        for i in range (mask.shape[0]-1, -1, -1):
             print(i)
             if(np.max(mask[i]) > 0):
                 crop_down = i
-                break 
-        
+                break
+
         for i in range(mask.shape[1]):
             print(i)
             if(np.max(mask[:][i]) > 0):
                 crop_left = i
                 break
 
-        for i in range (mask.shape[1], 0, -1):
+        for i in range (mask.shape[1], -1, -1):
             print(i)
+            print(len(mask[0]))
             if(np.max(mask[:][i]) > 0):
                 crop_right = i
                 break
 
-        print("crop_up: " + crop_up)
-        print("crop_down: " + crop_down)
-        print("crop_left: " + crop_left)
-        print("crop_right: " + crop_right)
+        print("crop_up: ", crop_up)
+        print("crop_down: ", crop_down)
+        print("crop_left: ", crop_left)
+        print("crop_right: ", crop_right)
 
         crop_mask = mask[crop_up:crop_down, crop_left:crop_right]
         cv2.resize(crop_mask, (100, 100))
