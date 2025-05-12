@@ -9,6 +9,7 @@ from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from skimage.metrics import structural_similarity
 
 import array
 
@@ -17,8 +18,8 @@ class SignRecognitionNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('SignRecognitionNode')
 
-        self.declare_parameter('lower_bound',[55,90,0]) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',[65,100,15])
+        self.declare_parameter('lower_bound',[50,55,0]) # TODO: figure out boundaries
+        self.declare_parameter('upper_bound',[65,70,15])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -38,6 +39,28 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Bool, 'GreenLight', 1)
+
+
+        image_list = []
+        image_list.append(cv2.imread("./Media/GoStraight.png"))
+        image_list.append(cv2.imread("./Media/Parkplatz.png"))
+        image_list.append(cv2.imread("./Media/TurnLeft.png"))
+        image_list.append(cv2.imread("./Media/TurnRight.png"))
+        image_list.append(cv2.imread("./Media/ZebraStreifen.png"))
+
+
+        crop_list = []
+        lower_bound = np.array([140,55,0], dtype = "uint8")
+        upper_bound = np.array([155,97,0], dtype = "uint8")
+
+        for i in image_list:
+            crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
+
+        '''
+        cv2.imwrite("test", image_list[0])
+        cv2.imwrite("test_crop", crop_list[0])
+        '''
+
 
     def scanner_callback(self, data):
         print(-1)
@@ -61,8 +84,6 @@ class SignRecognitionNode(rclpy.node.Node):
         crop_down = mask.shape[0]
         crop_left = 0
         crop_right = mask.shape[1]
-
-        print(1)
 
         for i in range (mask.shape[0]):
             print(i)
