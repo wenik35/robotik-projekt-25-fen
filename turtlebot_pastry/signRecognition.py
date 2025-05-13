@@ -9,6 +9,7 @@ from skimage.util.arraycrop import crop
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
+from rcl_interfaces.msg import SetParametersResult
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 from skimage.metrics import structural_similarity
 
@@ -29,6 +30,19 @@ class SignRecognitionNode(rclpy.node.Node):
         qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
                                           history=rclpy.qos.HistoryPolicy.KEEP_LAST,
                                           depth=1)
+
+        self.params = {
+            'lower_bound' : [140,55,0],
+            'upper_bound' : [155,97,0],
+        }
+
+        for param_name, default_value in self.params.items():
+            self.declare_parameter(param_name, default_value)
+
+        for param_name in self.params.keys():
+            self.params[param_name] = self.get_parameter(param_name).value
+
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
         # create subscribers for image data with changed qos
         self.subscription = self.create_subscription(
@@ -61,6 +75,16 @@ class SignRecognitionNode(rclpy.node.Node):
         cv2.imwrite("test", image_list[0])
         cv2.imwrite("test_crop", crop_list[0])
         '''
+
+    def parameter_callback(self, params):
+        succ = True
+        for param in params:
+            if param.name in self.params:
+                self.params[param.name] = param.value
+                self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+            else:
+                succ = False
+        return SetParametersResult(successful = succ)
 
 
     def scanner_callback(self, data):
