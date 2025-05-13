@@ -13,13 +13,12 @@ cd ~/ros2_ws/src
 
 In den src-Ordner wird dann dieses Repository geclont:
 ```
-git clone https://github.com/ros/ros_tutorials.git -b humble
+git clone https://github.com/wenik35/robotik-projekt-25-fen.git -b humble
 ```
 
 Anschließend müssen noch vom root des Workspaces aus Dependencys installiert werden:
 ```
-cd ..
-rosdep install -i --from-path src --rosdistro humble -y
+rosdep install -i --from-path ./ --rosdistro humble -y
 ```
 
 Nun kann das package gebaut werden (wenn --packages-select weggelassen wird, werden alle Packages im Workspace gebaut):
