@@ -5,6 +5,7 @@ import rclpy.node
 import cv2
 import numpy as np
 
+from skimage.util.arraycrop import crop
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
@@ -18,8 +19,8 @@ class SignRecognitionNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('SignRecognitionNode')
 
-        self.declare_parameter('lower_bound',[50,55,0]) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',[65,70,15])
+        self.declare_parameter('lower_bound',[90,230,76]) # TODO: figure out boundaries
+        self.declare_parameter('upper_bound',[100,255,128])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -49,12 +50,12 @@ class SignRecognitionNode(rclpy.node.Node):
         image_list.append(cv2.imread("./Media/ZebraStreifen.png"))
 
 
-        crop_list = []
+        self.crop_list = []
         lower_bound = np.array([140,55,0], dtype = "uint8")
         upper_bound = np.array([155,97,0], dtype = "uint8")
 
         for i in image_list:
-            crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
+            self.crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
 
         '''
         cv2.imwrite("test", image_list[0])
@@ -72,53 +73,60 @@ class SignRecognitionNode(rclpy.node.Node):
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         cv2.imshow("IMG", img_cv)
+        hsv_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
 
         # cropping image
-        crop_img = img_cv[50:][100:300][:] # TODO: Optimize cropping
+        crop_img = hsv_img[:, 320:] # TODO: Optimize cropping
+        crop_img = crop_img[50:]
 
         # find blue
         mask = cv2.inRange(crop_img, lower_bound, upper_bound)
-        crop_up = 0
-        crop_down = mask.shape[0]
-        crop_left = 0
-        crop_right = mask.shape[1]
-        print(mask.shape[0])
-        print(mask.shape[1])
+        if np.amax(mask > 0):
+            crop_up = 0
+            crop_down = mask.shape[0]
+            crop_left = 0
+            crop_right = mask.shape[1]
+            print(mask.shape[0])
+            print(mask.shape[1])
 
-        for i in range (mask.shape[0]):
-            print(i)
-            if(np.max(mask[i]) > 0):
-                crop_up = i
-                break
+            for i in range (mask.shape[0]):
+                #print(i)
+                if(np.max(mask[i]) > 0):
+                    crop_up = i
+                    break
 
-        for i in range (mask.shape[0]-1, -1, -1):
-            print(i)
-            if(np.max(mask[i]) > 0):
-                crop_down = i
-                break
+            for i in range (mask.shape[0]-1, -1, -1):
+                #print(i)
+                if(np.max(mask[i]) > 0):
+                    crop_down = i
+                    break
 
-        for i in range(mask.shape[1]):
-            print(i)
-            if(np.max(mask[:][i]) > 0):
-                crop_left = i
-                break
+            for i in range(mask.shape[1]):
+                #print(i)
+                if(np.max(mask[:,i]) > 0):
+                    crop_left = i
+                    break
 
-        for i in range (mask.shape[1], -1, -1):
-            print(i)
-            print(len(mask[0]))
-            if(np.max(mask[:][i]) > 0):
-                crop_right = i
-                break
+            for i in range (mask.shape[1]-1, -1, -1):
+                #print(i)
+                print(len(mask[0]))
+                if(np.max(mask[:,i]) > 0):
+                    crop_right = i
+                    break
 
-        print("crop_up: ", crop_up)
-        print("crop_down: ", crop_down)
-        print("crop_left: ", crop_left)
-        print("crop_right: ", crop_right)
+            print("crop_up: ", crop_up)
+            print("crop_down: ", crop_down)
+            print("crop_left: ", crop_left)
+            print("crop_right: ", crop_right)
 
-        crop_mask = mask[crop_up:crop_down, crop_left:crop_right]
-        cv2.resize(crop_mask, (100, 100))
+            crop_mask = mask[crop_up:crop_down, crop_left:crop_right]
+            precise_crop = crop_img[crop_up:crop_down, crop_left:crop_right]
 
-        cv2.imshow("CROPMASK", crop_mask)
+            if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
+                cv2.resize(crop_mask, (100, 100))
+                cv2.imshow("CROPMASK", crop_mask)
+                cv2.imshow("PRECISECROP", precise_crop)
+
         cv2.imshow("CROP", crop_img)
         cv2.imshow("MASK", mask)
         cv2.waitKey(1)
