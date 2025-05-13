@@ -19,8 +19,8 @@ class SignRecognitionNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('SignRecognitionNode')
 
-        self.declare_parameter('lower_bound',[90,230,76]) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',[100,255,128])
+        self.declare_parameter('lower_bound',[87,235,20]) # TODO: figure out boundaries
+        self.declare_parameter('upper_bound',[98,255,128])
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -76,9 +76,9 @@ class SignRecognitionNode(rclpy.node.Node):
         hsv_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
 
         # cropping image
-        crop_img = hsv_img[:, 320:] # TODO: Optimize cropping
-        crop_img = crop_img[50:]
-
+        crop_img = hsv_img[:, 480:] # TODO: Optimize cropping
+        crop_img = crop_img[150:430]
+        crop_img = cv2.resize(crop_img, (crop_img.shape[1]//2, crop_img.shape[0]//2))
         # find blue
         mask = cv2.inRange(crop_img, lower_bound, upper_bound)
         if np.amax(mask > 0):
