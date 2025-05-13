@@ -20,9 +20,6 @@ class SignRecognitionNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('SignRecognitionNode')
 
-        self.declare_parameter('lower_bound',[87,235,20]) # TODO: figure out boundaries
-        self.declare_parameter('upper_bound',[98,255,128])
-
         # init openCV-bridge
         self.bridge = CvBridge()
 
@@ -32,8 +29,8 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [140,55,0],
-            'upper_bound' : [155,97,0],
+            'lower_bound' : [87,235,20],
+            'upper_bound' : [98,255,128],
         }
 
         for param_name, default_value in self.params.items():
