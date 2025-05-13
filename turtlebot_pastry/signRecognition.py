@@ -159,10 +159,12 @@ class SignRecognitionNode(rclpy.node.Node):
             precise_crop = crop_img[crop_up:crop_down, crop_left:crop_right]
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
+                cv2.resize(precise_crop, (100, 100))
 
                 #compare to test images
                 scores = []
                 for i in self.image_list:
+                    i = cv2.resize(i, (100, 100))
                     scores.append(structural_similarity(i, precise_crop, gaussian_weights=False))
 
                 scores = np.array(scores)
@@ -172,7 +174,7 @@ class SignRecognitionNode(rclpy.node.Node):
                 if scores[i] > 0.5:
                     self.publisher_.publish(i)
 
-                cv2.resize(crop_mask, (100, 100))
+
                 cv2.imshow("CROPMASK", crop_mask)
                 cv2.imshow("PRECISECROP", precise_crop)
 
