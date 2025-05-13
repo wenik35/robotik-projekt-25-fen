@@ -165,9 +165,12 @@ class SignRecognitionNode(rclpy.node.Node):
                 for i in self.image_list:
                     scores.append(structural_similarity(i, precise_crop, gaussian_weights=False))
 
+                scores = np.array(scores)
+
                 #find best match
                 i = np.argmax(scores)
-                self.publisher_.publish(i)
+                if scores[i] > 0.5:
+                    self.publisher_.publish(i)
 
                 cv2.resize(crop_mask, (100, 100))
                 cv2.imshow("CROPMASK", crop_mask)
