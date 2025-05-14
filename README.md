@@ -90,4 +90,20 @@ Nutzt die Kamera, um in einer Spur zu fahren. Orientiert sich dabei an der recht
 - canny_high: High-Parameter für den Canny-Algorithmus
 - canny-low: Low-Parameter für den Canny-Algorithmus
 
+## signRecognition
+Nutzt die Kamera um Schilder zu erkennen
+### Publisher
+
+- sign_seen: Gibt erkanntest Schild als Integerwert zurück
+  - 0: Parkplatz
+  - 1: Geradeaus fahren
+  - 2: Links abbiegen
+  - 3: Rechts abbiegen
+  - 4: Zebrastreifen
+
+### Parameter
+
+- lower_bound: Untergrenze Blauton in HSV
+- upper_bound: Obergrenze Blauton in HSV
+- scalar: Skalierungsfaktor
 </details>

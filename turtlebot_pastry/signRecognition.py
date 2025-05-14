@@ -51,15 +51,15 @@ class SignRecognitionNode(rclpy.node.Node):
         self.subscription  # prevent unused variable warning
 
         # create publisher for driving commands
-        self.publisher_ = self.create_publisher(Int, 'SignSeen', 1)
+        self.publisher_ = self.create_publisher(Int, 'sign_seen', 1)
 
 
         image_list = []
-        image_list.append(cv2.imread("./Media/GoStraight.png"))
-        image_list.append(cv2.imread("./Media/ParkPlatz.png"))
-        image_list.append(cv2.imread("./Media/TurnLeft.png"))
-        image_list.append(cv2.imread("./Media/TurnRight.png"))
-        image_list.append(cv2.imread("./Media/ZebraStreifen.png"))
+        image_list.append(cv2.imread("./Media/ParkPlatz100.png"))
+        image_list.append(cv2.imread("./Media/GoStraight100.png"))
+        image_list.append(cv2.imread("./Media/TurnLeft100.png"))
+        image_list.append(cv2.imread("./Media/TurnRight100.png"))
+        image_list.append(cv2.imread("./Media/ZebraStreifen100.png"))
 
 
         self.crop_list = []
@@ -164,7 +164,6 @@ class SignRecognitionNode(rclpy.node.Node):
                 #compare to test images
                 scores = []
                 for i in self.image_list:
-                    i = cv2.resize(i, (100, 100))
                     scores.append(structural_similarity(i, precise_crop, gaussian_weights=False))
 
                 scores = np.array(scores)
