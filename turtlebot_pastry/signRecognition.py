@@ -29,9 +29,9 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [87,235,20],
-            'upper_bound' : [98,255,128],
-            'scalar' : 10
+            'lower_bound' : [87,200,20],
+            'upper_bound' : [100,255,128],
+            'scalar' : 20
         }
 
         for param_name, default_value in self.params.items():
@@ -39,6 +39,8 @@ class SignRecognitionNode(rclpy.node.Node):
 
         for param_name in self.params.keys():
             self.params[param_name] = self.get_parameter(param_name).value
+
+        self.img_cv = np.zeros((480,640,3))
 
         self.add_on_set_parameters_callback(self.parameter_callback)
 
@@ -75,6 +77,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         self.image_list = image_list
 
+
         '''
         cv2.imwrite("test", image_list[0])
         cv2.imwrite("test_crop", crop_list[0])
@@ -98,6 +101,8 @@ class SignRecognitionNode(rclpy.node.Node):
 
     def timer_callback(self):
 
+        print(self.img_cv)
+
         lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
         lower_bound = np.array(lower_bound, dtype = "uint8")
         upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
@@ -108,7 +113,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # cropping image
         crop_img = self.img_cv[:, 480:] # TODO: Optimize cropping
-        crop_img = crop_img[150:430]
+        crop_img = crop_img[150:350]
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
@@ -151,7 +156,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
             for i in range(img_width-1, -1, -1):
                 #print(i)
-                print(len(mask[0]))
+                #print(len(mask[0]))
                 if(np.max(mask[:,i]) > 0):
                     crop_right = i
                     break
@@ -161,8 +166,9 @@ class SignRecognitionNode(rclpy.node.Node):
             print("crop_left: ", crop_left)
             print("crop_right: ", crop_right)
 
-            crop_mask = mask[crop_up:crop_down, crop_left:crop_right]
-            precise_crop = crop_img[crop_up:crop_down, crop_left:crop_right]
+            buffer = 10
+            crop_mask = mask[crop_up - buffer : crop_down + buffer, crop_left - buffer : crop_right + buffer]
+            precise_crop = crop_img[crop_up - buffer : crop_down + buffer, crop_left - buffer : crop_right + buffer]
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
                 precise_crop = cv2.resize(precise_crop, (100, 100))
@@ -170,7 +176,8 @@ class SignRecognitionNode(rclpy.node.Node):
                 #compare to test images
                 scores = []
                 for i in self.image_list:
-                    scores.append(structural_similarity(i, precise_crop, gaussian_weights=False, multichannel=True))
+                    scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
+                    #scores.append(structural_similarity(i, precise_crop, gaussian_weights=True, multichannel=True))
 
                 scores = np.array(scores)
 
@@ -187,6 +194,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         cv2.imshow("CROP", crop_img)
         cv2.imshow("MASK", mask)
+        cv2.imshow("Resize", cv2.cvtColor(img_resize, cv2.COLOR_HSV2BGR))
         cv2.waitKey(1)
 
 def main(args=None):
