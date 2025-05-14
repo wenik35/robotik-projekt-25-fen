@@ -31,7 +31,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.params = {
             'lower_bound' : [87,200,20],
             'upper_bound' : [100,255,128],
-            'scalar' : 20
+            'scalar' : 18
         }
 
         for param_name, default_value in self.params.items():
@@ -40,7 +40,7 @@ class SignRecognitionNode(rclpy.node.Node):
         for param_name in self.params.keys():
             self.params[param_name] = self.get_parameter(param_name).value
 
-        self.img_cv = np.zeros((480,640,3))
+        self.img_cv = np.ones((480,640,3), dtype= "uint8")
 
         self.add_on_set_parameters_callback(self.parameter_callback)
 
@@ -119,6 +119,8 @@ class SignRecognitionNode(rclpy.node.Node):
         img_height = crop_img.shape[0]
 
         # convert to HSV
+
+
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
 
         # "Blurring" image
@@ -172,12 +174,15 @@ class SignRecognitionNode(rclpy.node.Node):
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
                 precise_crop = cv2.resize(precise_crop, (100, 100))
-
+                edged = cv2.resize(cv2.Canny(precise_crop, 50, 200), (100,100))
                 #compare to test images
                 scores = []
                 for i in self.image_list:
-                    scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
-                    #scores.append(structural_similarity(i, precise_crop, gaussian_weights=True, multichannel=True))
+                #for i in self.crop_list:
+                    i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
+                    #scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
+                    scores.append(structural_similarity(i, edged, gaussian_weight=False, multichannel=True))#
+                    #scores.append(structural_similarity(i, cv2.inRange(precise_crop, lower_bound, upper_bound), gaussian_weights=True, multichannel=True))
 
                 scores = np.array(scores)
 
@@ -189,6 +194,7 @@ class SignRecognitionNode(rclpy.node.Node):
                     self.publisher_.publish(msg)
 
                 print(scores)
+                cv2.imshow("Edged", edged)
                 cv2.imshow("CROPMASK", crop_mask)
                 cv2.imshow("PRECISECROP", precise_crop)
 
