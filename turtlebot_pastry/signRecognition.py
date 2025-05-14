@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from skimage.util.arraycrop import crop
-from std_msgs.msg import Int
+from std_msgs.msg import Int64
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from rcl_interfaces.msg import SetParametersResult
@@ -31,7 +31,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.params = {
             'lower_bound' : [87,235,20],
             'upper_bound' : [98,255,128],
-            'scalar' : 2
+            'scalar' : 10
         }
 
         for param_name, default_value in self.params.items():
@@ -51,15 +51,19 @@ class SignRecognitionNode(rclpy.node.Node):
         self.subscription  # prevent unused variable warning
 
         # create publisher for driving commands
-        self.publisher_ = self.create_publisher(Int, 'sign_seen', 1)
+        self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
+
+        # create timer to periodically invoke the driving logic
+        timer_period = 0.5  # seconds
+        self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
 
         image_list = []
-        image_list.append(cv2.imread("./Media/ParkPlatz100.png"))
-        image_list.append(cv2.imread("./Media/GoStraight100.png"))
-        image_list.append(cv2.imread("./Media/TurnLeft100.png"))
-        image_list.append(cv2.imread("./Media/TurnRight100.png"))
-        image_list.append(cv2.imread("./Media/ZebraStreifen100.png"))
+        image_list.append(cv2.resize(cv2.imread("./Media/ParkPlatz100.png"), (100, 100)))
+        image_list.append(cv2.resize(cv2.imread("./Media/GoStraight100.png"), (100, 100)))
+        image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft100.png"), (100, 100)))
+        image_list.append(cv2.resize(cv2.imread("./Media/TurnRight100.png"), (100, 100)))
+        image_list.append(cv2.resize(cv2.imread("./Media/ZebraStreifen100.png"), (100, 100)))
 
 
         self.crop_list = []
@@ -88,20 +92,22 @@ class SignRecognitionNode(rclpy.node.Node):
 
 
     def scanner_callback(self, data):
+        # convert message to opencv image
+        self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
+        cv2.imshow("IMG", self.img_cv)
+
+    def timer_callback(self):
 
         lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
         lower_bound = np.array(lower_bound, dtype = "uint8")
         upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
         upper_bound = np.array(upper_bound, dtype = "uint8")
-        scalar = self.get_parameter('scalar').get_parameter_value().integer_array_value
+        scalar = self.get_parameter('scalar').get_parameter_value().integer_value
 
-        # convert message to opencv image
-        img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
-        cv2.imshow("IMG", img_cv)
 
 
         # cropping image
-        crop_img = img_cv[:, 480:] # TODO: Optimize cropping
+        crop_img = self.img_cv[:, 480:] # TODO: Optimize cropping
         crop_img = crop_img[150:430]
 
         img_width = crop_img.shape[1]
@@ -159,21 +165,23 @@ class SignRecognitionNode(rclpy.node.Node):
             precise_crop = crop_img[crop_up:crop_down, crop_left:crop_right]
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
-                cv2.resize(precise_crop, (100, 100))
+                precise_crop = cv2.resize(precise_crop, (100, 100))
 
                 #compare to test images
                 scores = []
                 for i in self.image_list:
-                    scores.append(structural_similarity(i, precise_crop, gaussian_weights=False))
+                    scores.append(structural_similarity(i, precise_crop, gaussian_weights=False, multichannel=True))
 
                 scores = np.array(scores)
 
                 #find best match
                 i = np.argmax(scores)
-                if scores[i] > 0.5:
-                    self.publisher_.publish(i)
+                if True: #scores[i] > 0.0:
+                    msg = Int64()
+                    msg.data = int(i)
+                    self.publisher_.publish(msg)
 
-
+                print(scores)
                 cv2.imshow("CROPMASK", crop_mask)
                 cv2.imshow("PRECISECROP", precise_crop)
 
