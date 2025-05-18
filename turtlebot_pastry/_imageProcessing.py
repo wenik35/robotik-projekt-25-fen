@@ -2,14 +2,13 @@
 simple line following node
 """
 
-import sys
 import rclpy
 import rclpy.node
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
+import math
+from random import randrange
 
-from geometry_msgs.msg import Twist
 from std_msgs.msg import Int16, String
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
@@ -24,8 +23,8 @@ class imageProcessingNode(rclpy.node.Node):
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
         self.declare_parameter('threshold', 50)
-        self.declare_parameter('minLineLength', 10)
-        self.declare_parameter('maxLineGap', 5)
+        self.declare_parameter('minLineLength', 11)
+        self.declare_parameter('maxLineGap', 30)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -69,6 +68,7 @@ class imageProcessingNode(rclpy.node.Node):
         # use cv2 edge detection
         edged = cv2.Canny(cut_img, canny_low, canny_high)
         grayscale = cv2.cvtColor(cut_img, cv2.COLOR_BGR2GRAY)
+        grayscale[0][0] = 255
 
         offset = Int16()
         offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
@@ -77,28 +77,24 @@ class imageProcessingNode(rclpy.node.Node):
         masked = region(edged)
         edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
-        lines = cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap)
-        visual_lines = display_lines(edged2color, lines, (255, 0, 0))
+        lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
-        averaged_lines = average(cut_img, lines)
-        display_averaged_lines = display_lines(edged2color, averaged_lines, (0, 255, 0))
+        filtered_lines = filter_lines(grayscale, lines)
+        display_filtered_lines = display_lines(edged2color, filtered_lines)
+        filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
+
+        averaged = average(cut_img, filtered_lines)
+        steering = calculate_steering(averaged)
+
+        display_averaged_lines = display_lines(edged2color, averaged, (0, 255, 0))
         lanes = cv2.addWeighted(edged2color, 0.8, display_averaged_lines, 1, 10)
 
-        '''
-        boundary_lines = detect_boundary(edged, lines)
-        if boundary_lines is not None:
-            boundary_message = String()
-            boundary_message.data = "Boundary detected"
-            self.boundary_detected.publish(boundary_message)
-
-            boundary_display_lines = display_lines(edged2color, boundary_lines, (0, 255, 0))
-            lanes = cv2.addWeighted(boundary_display_lines, 0.8, lanes, 1, 10)
-        '''
-
+        grayscale_color = cv2.cvtColor(grayscale, cv2.COLOR_GRAY2BGR)
         masked_color = cv2.cvtColor(masked, cv2.COLOR_GRAY2BGR)
 
-        images = np.concatenate((cut_img, masked_color, lines_img, lanes), axis=0)
+        images = np.concatenate((cut_img, grayscale_color, masked_color, lines_img, filtered_lines_img, lanes), axis=0)
 
         # show image
         cv2.imshow("images", images)
@@ -125,15 +121,112 @@ def warp(image):
 
     return warped_img
 
+def unpack_lines(lines):
+    unpacked = []
+    for line in lines:
+        unpacked.append(line[0])
+    return unpacked
 
-def display_lines(image, lines, color):
+def filter_lines(grayscale, lines):
+    height, width = grayscale.shape[:2]
+    result = []
+    # classify as left bound or right bound
+    left = []
+    right = []
+    if lines is not None:
+        for line in lines:
+            middle = get_middle_point(line)
+
+            if grayscale[middle[1]][(middle[0] + 3) % width] > 140:
+                left.append(line)
+            else:
+                right.append(line)
+
+    groups = []
+    # group left and right bounds
+    for line_left in left:
+        left_middle = get_middle_point(line_left)
+        potential_partner = []
+
+        # find potential partners to the right and roughly in the same height
+        for line_right in right:
+            right_x = get_x_sorted(line_right)
+            right_middle = get_middle_point(line_right)
+
+            if right_x[0] < left_middle[0] < right_x[1] and right_middle[1] > left_middle[1]:
+                potential_partner.append(line_right)
+
+        # if there is more than one potential partner, find the closest one
+        if len(potential_partner) > 0:
+            groups.append(line_left)
+
+            if len(potential_partner) > 1:
+                left_middle = get_middle_point(line_left)
+                
+                dists = []
+                for line in potential_partner:
+                    right_middle = get_middle_point(line)
+                    dists.append(math.dist(left_middle, right_middle))
+
+                smallest = np.argmin(dists)
+
+                groups.append(potential_partner[smallest])
+            else:
+                groups.append(potential_partner[0])
+
+    return groups
+
+def calculate_steering(lines):
+    left = lines[0]
+    right = lines[1]
+
+    if len(left) == len(right) == 0:
+        return 0
+    elif len(left) == 0:
+        return 90 - line_angle(right)
+    elif len(right) == 0:
+        return 90 - line_angle(left) 
+    else :
+        x1, y1, x2, y2 = left
+        slope_left, y_int_left = np.polyfit((x1, x2), (y1, y2), 1)
+
+        x1, y1, x2, y2 = right 
+        slope_right, y_int_right = np.polyfit((x1, x2), (y1, y2), 1)
+
+        left_angle = line_angle(left)
+        if (slope_left < 0):
+            left_angle = 180 - left_angle
+
+        right_angle = line_angle(right)
+        if (slope_right > 0):
+            right_angle = 180 - right_angle
+
+        return 90 - (left_angle + right_angle) // 2
+
+def get_middle_point(line):
+    x1, y1, x2, y2 = line 
+    x_middle = (x1 + x2) // 2
+    y_middle = (y1 + y2) // 2
+    return (x_middle, y_middle)
+
+def get_x_sorted(line):
+    x1, y1, x2, y2 = line 
+    if x1 < x2:
+        return (x1, x2)
+    else:
+        return (x2, x1)
+
+def display_lines(image, lines, color=None):
     lines_image = np.zeros_like(image)
+    random_color = (color == None)
     if lines is not None:
         for line in lines:
             try:
-                #color = (0, 0, 255) if (line_angle(line[0]) > 45) else (255, 0, 0)
-                x1, y1, x2, y2 = line[0]
-                cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
+                if (len(line) > 0):
+                    if random_color:
+                        color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
+                    x1, y1, x2, y2 = line 
+                    cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
             except Exception as e:
                 print("Error in display_lines: ", e)
                 print(line)
@@ -145,7 +238,7 @@ def detect_boundary(image, lines):
     polys = []
     if lines is not None:
         for line in lines:
-            x1, y1, x2, y2 = line.reshape(4)
+            x1, y1, x2, y2 = line 
             parameters = np.polyfit((x1, x2), (y1, y2), 1)
             slope = parameters[0]
             y_int = parameters[1]
@@ -158,41 +251,46 @@ def detect_boundary(image, lines):
 def average(image, lines):
     left = []
     right = []
+    height, width = image.shape[:2]
     if lines is not None:
         for line in lines:
-            x1, y1, x2, y2 = line[0].reshape(4)
-            parameters = np.polyfit((x1, x2), (y1, y2), 1)
-            slope = parameters[0]
-            y_int = parameters[1]
-            if slope < 0:
-                left.append((slope, y_int))
-            else:
-                right.append((slope, y_int))
-    
-    right_avg = np.average(right, axis=0)
-    left_avg = np.average(left, axis=0)
-    left_line = make_points(image, [left_avg])
-    right_line = make_points(image, [right_avg])
-    return np.array([left_line, right_line])
+            x1, y1, x2, y2 = line
+            if (not x1 == x2) and (not y1 == y2):
+                parameters = np.polyfit((x1, x2), (y1, y2), 1)
+                slope = parameters[0]
+                y_int = parameters[1]
 
-def make_points(image, lines):
-    point_arrays = []
-    print(lines)
-    if lines is not None:
-        for line in lines:
-            try:
-                slope, y_int = line 
-                if not (slope == 0.0):
-                    y1 = image.shape[0]
-                    y2 = int(y1 * (3/5))
-                    x1 = int((y1 - y_int) // slope)
-                    x2 = int((y2 - y_int) // slope)
-                    point_arrays.append([x1, y1, x2, y2])
-            except Exception as e:
-                print("Error in make_points: ", e)
-                print(line)
-                continue
-    return point_arrays
+                if slope < 0 and x1 < width//2:
+                    left.append((slope, y_int))
+
+                if slope > 0 and x1 > width//2:
+                    right.append((slope, y_int))
+
+    left_line = []
+    if len(left) > 0:
+        left_avg = np.average(left, axis=0)
+        left_line = make_points(image, left_avg)    
+    
+    right_line = []
+    if len(right) > 0:
+        right_avg = np.average(right, axis=0)
+        right_line = make_points(image, right_avg)
+
+    return [left_line, right_line]
+
+def make_points(image, line):
+    try:
+        slope, y_int = line 
+        if not (slope == 0.0):  #TODO: why?
+            y1 = image.shape[0]
+            y2 = int(y1 * (3/5))
+            x1 = int((y1 - y_int) // slope)
+            x2 = int((y2 - y_int) // slope)
+            return [x1, y1, x2, y2]
+    except Exception as e:
+        print("Error in make_points: ", e)
+        print(line)
+        return []
 
 def line_angle(line):
     x1, y1, x2, y2 = line
