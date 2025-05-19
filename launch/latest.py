@@ -34,4 +34,11 @@ def generate_launch_description():
             output='screen',
             arguments=['--ros-args', '--log-level', 'INFO']
         ),
+        Node(
+            package='turtlebot_pastry',
+            executable='parking',
+            name='parking',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
     ])

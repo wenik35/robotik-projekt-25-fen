@@ -48,7 +48,13 @@ class stateMachineNode(Node):
         self.parkingNoticeSub = self.create_subscription(
             Bool,
             'parking_in_process',
-            self.lane_change_notice_callback,
+            self.parking_notice_callback,
+            qos_profile=qos_policy)
+
+        self.laneChangeCommandSub = self.create_subscription(
+            Twist,
+            'parking_cmd',
+            self.parking_callback,
             qos_profile=qos_policy)
 
         # status variables
@@ -84,6 +90,19 @@ class stateMachineNode(Node):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
         if (self.changingLane and self.greenLight and not forbid_driving):
+            self.cmd_vel.publish(msg)
+
+    def parking_notice_callback(self, msg):
+        self.parking = msg.data
+
+        #announce status
+        self.statusMessage.data = "Parking" if msg.data else "Driving in lane"
+        self.status.publish(self.statusMessage)
+
+    def parking_callback(self, msg):
+        forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
+
+        if (self.parking and self.greenLight and not forbid_driving):
             self.cmd_vel.publish(msg)
 
 def main(args=None):

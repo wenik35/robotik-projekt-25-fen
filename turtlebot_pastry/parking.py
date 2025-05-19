@@ -13,10 +13,10 @@ from cv_bridge import CvBridge
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 from venv import create
 
-class imageProcessingNode(rclpy.node.Node):
+class parkingNode(rclpy.node.Node):
 
     def __init__(self):
-        super().__init__('imageProcessingNode')
+        super().__init__('parkingNode')
 
         self.declare_parameter('detection_distance', 0.30)
         self.declare_parameter('deadreconing_time', 3.0)
@@ -53,11 +53,11 @@ class imageProcessingNode(rclpy.node.Node):
 
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
         self.parking = Bool()
-        self.command_publisher = self.create_publisher(Twist, 'change_lane_cmd', qos_profile=qos_policy)
+        self.command_publisher = self.create_publisher(Twist, 'parking_cmd', qos_profile=qos_policy)
 
         self.status = "Paused"
         self.lineNo = 0
-        self.line_timer = self.create_timer(2000000000, self.timer_callback)
+        #self.line_timer = self.create_timer(2000000000, self.timer_callback)
 
     def sign_callback(self, data):
         if data == 0:
@@ -66,23 +66,30 @@ class imageProcessingNode(rclpy.node.Node):
 
     def line_callback(self, data):
         if self.status == "Active":
-            if self.lineNo++ != 0:
+            self.status = "Searching"
+            timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
+            #self.line_timer.cancel()
+            self.line_timer = self.create_timer(timer_period, self.timer_callback)
+            self.lineNo += 1
+            '''
+            if self.lineNo != 0:
                 self.status = "Scanning"
                 timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
                 self.line_timer.cancel()
                 self.line_timer = self.create_timer(timer_period, self.timer_callback)
-                last_call = self.lineNo - 1
-                sleep(2.9)
+                #last_call = self.lineNo
+                self.lineNo += 1
+                sleep(timer_period - 0.1)
                 self.last_call = last_call
 
             if self.lineNo == 4:
                 self.lineNo = 0
                 self.status = "Paused"
-
+            '''
     def scanner_callback(self, data):
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
-            space_detection = data.ranges[540] < detection_distance
+            space_detection = min(data.ranges[500:580]) < detection_distance
             if space_detection:
                 self.status = "Parking"
                 self.parking.data = True
@@ -93,8 +100,10 @@ class imageProcessingNode(rclpy.node.Node):
                 self.status = "Active"
 
     def timer_callback(self):
-        if self.status == "Active" and self.last_call == self.lineNo and self.lineNo++ != 0:
+        if self.status == "Active" '''and self.last_call == self.lineNo''' and self.lineNo != 0:
             self.status = "Scanning"
+            self.lineNo += 1
+            #self.last_call += 1
 
         if self.lineNo == 4:
             self.lineNo = 0
@@ -124,6 +133,9 @@ class imageProcessingNode(rclpy.node.Node):
         sleep(1.5)
 
         self.turn90Deg(False)
+        self.parking.data = False
+        self.notice_publisher.publish(self.parking)
+        self.park()
 
         # stop, give back control to lane follower
         self.status = "Paused"
@@ -148,3 +160,9 @@ class imageProcessingNode(rclpy.node.Node):
         twist.linear.x = 0.0
         twist.angular.z = 0.0
         self.command_publisher.publish(twist)
+
+def main(args=None):
+    spinUntilKeyboardInterrupt(args, parkingNode)
+
+if __name__ == '__main__':
+    main()

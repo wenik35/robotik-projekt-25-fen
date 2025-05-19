@@ -25,9 +25,10 @@ setup(
             'changeLaneAtObstacle = turtlebot_pastry.changeLaneAtObstacle:main',
             'followPath = turtlebot_pastry.followPath:main',
             'trafficlight_start = turtlebot_pastry.trafficlight_start:main',
-            'signRecognition = turtlebot_pastry.signRecognition:main,
+            'signRecognition = turtlebot_pastry.signRecognition:main',
             'imageProcessing = turtlebot_pastry._imageProcessing:main',
             'changeLane = turtlebot_pastry.changeLane:main',
+            'parking = turtlebot_pastry.parking:main'
 
 
         ],
