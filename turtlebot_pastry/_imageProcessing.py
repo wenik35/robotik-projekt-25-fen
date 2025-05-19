@@ -22,9 +22,9 @@ class imageProcessingNode(rclpy.node.Node):
         self.declare_parameter('line_expected_at', 550)
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
-        self.declare_parameter('threshold', 50)
-        self.declare_parameter('minLineLength', 11)
-        self.declare_parameter('maxLineGap', 30)
+        self.declare_parameter('threshold', 60)
+        self.declare_parameter('minLineLength', 20)
+        self.declare_parameter('maxLineGap', 10)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -42,8 +42,11 @@ class imageProcessingNode(rclpy.node.Node):
             qos_profile=qos_policy)
         self.subscription  # prevent unused variable warning
 
-        self.line_offset = self.create_publisher(Int16, 'line_offset', qos_profile=qos_policy)
+        self.steering = self.create_publisher(Int16, 'line_offset', qos_profile=qos_policy)
         self.boundary_detected = self.create_publisher(String, 'boundary_detected', qos_profile=qos_policy)
+        self.parking_line = self.create_publisher(String, 'parking_line', qos_profile=qos_policy)
+        self.parking_message = String()
+        self.parking_message.data = "First parking bay found"
 
     # handling received image data
     def scanner_callback(self, data):
@@ -60,7 +63,7 @@ class imageProcessingNode(rclpy.node.Node):
 
         # cut upper (uninteresting) half out
         height, width = img_cv.shape[:2]
-        cut_img = img_cv[height-height//2:height, 0:width]
+        cut_img = img_cv[height-height//3:height, 0:width]
 
         # warp image to birds eye view
         #warped = warp(cut_img)
@@ -74,11 +77,11 @@ class imageProcessingNode(rclpy.node.Node):
         grayscale[0][0] = 255
         offset = Int16()
         offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
-        self.line_offset.publish(offset)
+        self.steering.publish(offset)
 
         # apply hough lines algorithm
         masked = region(edged)
-        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=50, minLineLength=11, maxLineGap=30))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
@@ -105,17 +108,36 @@ class imageProcessingNode(rclpy.node.Node):
 
 
         # detect parking bay
-        parking_bay_roi = edged[0:height, width-width//3:width]
+        height, width = edged.shape[:2]
+        parking_bay_roi = edged[height-height//4:height, width-width//8:width]
         parking_lines = unpack_lines(cv2.HoughLinesP(parking_bay_roi, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
-
         parking_bay_roi_color = cv2.cvtColor(parking_bay_roi, cv2.COLOR_GRAY2BGR)
+
         display_parking_lines = display_lines(parking_bay_roi_color, parking_lines)
         parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_parking_lines, 1, 10)
-        cv2.imshow("parking", parking_lines_img)
 
+        filtered_parking_lines = filter_parking(parking_lines)
+        display_filtered_parking_lines = display_lines(parking_bay_roi_color, filtered_parking_lines)
+        filtered_parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_filtered_parking_lines, 1, 10)
+
+        combined_parking = np.concatenate((parking_lines_img, filtered_parking_lines_img), axis=0)
+        #cv2.imshow("parking", combined_parking)
+        if len(filtered_parking_lines) > 0:
+            self.parking_line.publish(self.parking_message)
 
         cv2.waitKey(1)
 
+def filter_parking(lines):
+    result = []
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line
+            if (not x1 == x2) and (not y1 == y2):
+                slope, y_int = np.polyfit((x1, x2), (y1, y2), 1)
+                if -1 < slope < 0:
+                    result.append(line)
+
+    return np.array(result)
 
 
 def region(image):
@@ -141,6 +163,7 @@ def warp(image):
 
 def unpack_lines(lines):
     unpacked = []
+
     if lines is not None:
         for line in lines:
             unpacked.append(line[0])
@@ -302,7 +325,7 @@ def make_points(image, line):
         slope, y_int = line 
         if not (slope == 0.0):  #TODO: why?
             y1 = image.shape[0]
-            y2 = int(y1 * (3/5))
+            y2 = 0
             x1 = int((y1 - y_int) // slope)
             x2 = int((y2 - y_int) // slope)
             return [x1, y1, x2, y2]
