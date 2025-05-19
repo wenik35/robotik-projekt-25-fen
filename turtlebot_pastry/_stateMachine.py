@@ -45,6 +45,12 @@ class stateMachineNode(Node):
             self.lane_changer_callback,
             qos_profile=qos_policy)
 
+        self.parkingNoticeSub = self.create_subscription(
+            Bool,
+            'parking_in_process',
+            self.lane_change_notice_callback,
+            qos_profile=qos_policy)
+
         # status variables
         self.changingLane = False
         self.greenLight = True
