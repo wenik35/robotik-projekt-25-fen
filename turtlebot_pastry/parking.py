@@ -127,7 +127,6 @@ class parkingNode(rclpy.node.Node):
         sleep(11)
         self.turn90Deg(True)
 
-        twist = Twist()
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(1.5)
@@ -135,7 +134,6 @@ class parkingNode(rclpy.node.Node):
         self.turn90Deg(False)
         self.parking.data = False
         self.notice_publisher.publish(self.parking)
-        self.park()
 
         # stop, give back control to lane follower
         self.status = "Paused"
