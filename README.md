@@ -106,4 +106,5 @@ Nutzt die Kamera um Schilder zu erkennen
 - lower_bound: Untergrenze Blauton in HSV
 - upper_bound: Obergrenze Blauton in HSV
 - scalar: Skalierungsfaktor
+
 </details>
