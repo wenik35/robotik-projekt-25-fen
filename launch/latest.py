@@ -27,4 +27,11 @@ def generate_launch_description():
             name='followPath',
             output='screen'
         ),
+        Node(
+            package='turtlebot_pastry',
+            executable='signRecognition',
+            name='signRecognition',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
     ])
