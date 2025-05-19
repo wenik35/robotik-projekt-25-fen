@@ -60,49 +60,67 @@ class imageProcessingNode(rclpy.node.Node):
 
         # cut upper (uninteresting) half out
         height, width = img_cv.shape[:2]
-        cut_img = img_cv[height-height//3:height, 0:width]
+        cut_img = img_cv[height-height//2:height, 0:width]
 
         # warp image to birds eye view
         #warped = warp(cut_img)
 
         # use cv2 edge detection
         edged = cv2.Canny(cut_img, canny_low, canny_high)
+        edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
+
+        # publish driving info
         grayscale = cv2.cvtColor(cut_img, cv2.COLOR_BGR2GRAY)
         grayscale[0][0] = 255
-
         offset = Int16()
         offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
         self.line_offset.publish(offset)
 
+        # apply hough lines algorithm
         masked = region(edged)
-        edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
-
-        lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
+        # filter out line the do not belong to lanes
         filtered_lines = filter_lines(grayscale, lines)
         display_filtered_lines = display_lines(edged2color, filtered_lines)
         filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
+        # average lines and calculate driving info
         averaged = average(cut_img, filtered_lines)
         steering = calculate_steering(averaged)
 
+        # display lanes
         display_averaged_lines = display_lines(edged2color, averaged, (0, 255, 0))
         lanes = cv2.addWeighted(edged2color, 0.8, display_averaged_lines, 1, 10)
 
+        # show combined images
         grayscale_color = cv2.cvtColor(grayscale, cv2.COLOR_GRAY2BGR)
         masked_color = cv2.cvtColor(masked, cv2.COLOR_GRAY2BGR)
+        raw_imgs = np.concatenate((cut_img, grayscale_color, masked_color), axis=0)
+        lane_imgs = np.concatenate((lines_img, filtered_lines_img, lanes), axis=0)
+        combined = np.concatenate((raw_imgs, lane_imgs), axis=1)
+        cv2.imshow("lanes", combined)
 
-        images = np.concatenate((cut_img, grayscale_color, masked_color, lines_img, filtered_lines_img, lanes), axis=0)
 
-        # show image
-        cv2.imshow("images", images)
+        # detect parking bay
+        parking_bay_roi = edged[0:height, width-width//3:width]
+        parking_lines = unpack_lines(cv2.HoughLinesP(parking_bay_roi, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+
+        parking_bay_roi_color = cv2.cvtColor(parking_bay_roi, cv2.COLOR_GRAY2BGR)
+        display_parking_lines = display_lines(parking_bay_roi_color, parking_lines)
+        parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_parking_lines, 1, 10)
+        cv2.imshow("parking", parking_lines_img)
+
+
         cv2.waitKey(1)
+
+
 
 def region(image):
     height, width = image.shape[:2]
-    trapezoid = np.array([[0.3*width, 0], [width - 0.3*width, 0], [width, height], [0, height]], np.int32)
+    trapezoid = np.array([[0.3*width, height//3], [width - 0.3*width, height//3], [width, height], [0, height]], np.int32)
 
     mask = np.zeros_like(image)
     
@@ -123,8 +141,9 @@ def warp(image):
 
 def unpack_lines(lines):
     unpacked = []
-    for line in lines:
-        unpacked.append(line[0])
+    if lines is not None:
+        for line in lines:
+            unpacked.append(line[0])
     return unpacked
 
 def filter_lines(grayscale, lines):
