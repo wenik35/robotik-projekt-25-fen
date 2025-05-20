@@ -50,6 +50,11 @@ class parkingNode(rclpy.node.Node):
             self.follow_line_callback,
             qos_profile=qos_policy)
 
+        self.line_call_sub = self.create_subscription(
+            Twist,
+            'parking_line',
+            self.line_callback,
+            qos_profile=qos_policy)
 
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
         self.parking = Bool()
@@ -97,15 +102,15 @@ class parkingNode(rclpy.node.Node):
                 self.park()
 
             else:
-                self.status = "Active"
+                self.status = "Searching"
 
     def timer_callback(self):
-        if self.status == "Active" '''and self.last_call == self.lineNo''' and self.lineNo != 0:
+        if self.status == "Searching" '''and self.last_call == self.lineNo''' and 4 > self.lineNo > 0:
             self.status = "Scanning"
             self.lineNo += 1
             #self.last_call += 1
 
-        if self.lineNo == 4:
+        elif self.lineNo == 4:
             self.lineNo = 0
             self.status = "Paused"
 
