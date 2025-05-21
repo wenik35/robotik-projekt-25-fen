@@ -88,7 +88,7 @@ class SignRecognitionNode(rclpy.node.Node):
         for param in params:
             if param.name in self.params:
                 self.params[param.name] = param.value
-                self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+                #self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
             else:
                 succ = False
         return SetParametersResult(successful = succ)
@@ -163,10 +163,10 @@ class SignRecognitionNode(rclpy.node.Node):
                     crop_right = i
                     break
 
-            print("crop_up: ", crop_up)
-            print("crop_down: ", crop_down)
-            print("crop_left: ", crop_left)
-            print("crop_right: ", crop_right)
+            #print("crop_up: ", crop_up)
+            #print("crop_down: ", crop_down)
+            #print("crop_left: ", crop_left)
+            #print("crop_right: ", crop_right)
 
             buffer = 50
             crop_mask = mask[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
@@ -222,7 +222,7 @@ class SignRecognitionNode(rclpy.node.Node):
             buffer = 10
             crop_mask = mask2[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
             precise_crop = precise_crop[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
-            cv2.imshow("MASK2", mask2)
+            #cv2.imshow("MASK2", mask2)
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
                 precise_crop = cv2.resize(precise_crop, (100, 100))
@@ -247,16 +247,16 @@ class SignRecognitionNode(rclpy.node.Node):
                     print(i)
 
                 print(scores)
+                self.get_logger().info("SIGN FOUND!")
+                #cv2.imshow("Edged", edged)
+                
+                #cv2.imshow("CROPMASK", crop_mask)
+                #cv2.imshow("PRECISECROP2", precise_crop)
 
-                cv2.imshow("Edged", edged)
+        #cv2.imshow("CROP", crop_img)
 
-                cv2.imshow("CROPMASK", crop_mask)
-                cv2.imshow("PRECISECROP2", precise_crop)
-
-        cv2.imshow("CROP", crop_img)
-
-        cv2.imshow("Resize", cv2.cvtColor(img_resize, cv2.COLOR_HSV2BGR))
-        cv2.waitKey(1)
+        #cv2.imshow("Resize", cv2.cvtColor(img_resize, cv2.COLOR_HSV2BGR))
+        #cv2.waitKey(1)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, SignRecognitionNode)

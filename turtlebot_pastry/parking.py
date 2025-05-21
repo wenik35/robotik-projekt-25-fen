@@ -19,7 +19,7 @@ class parkingNode(rclpy.node.Node):
         super().__init__('parkingNode')
 
         self.declare_parameter('detection_distance', 0.30)
-        self.declare_parameter('deadreconing_time', 3.0)
+        self.declare_parameter('deadreconing_time', 8.0)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -51,7 +51,7 @@ class parkingNode(rclpy.node.Node):
             qos_profile=qos_policy)
 
         self.line_call_sub = self.create_subscription(
-            Twist,
+            String,
             'parking_line',
             self.line_callback,
             qos_profile=qos_policy)
@@ -71,7 +71,7 @@ class parkingNode(rclpy.node.Node):
         self.status_publisher.publish(self.status_status)
 
     def sign_callback(self, data):
-        if data.data == 0:
+        if data.data == 0 and self.status == "Paused":
             self.status = "Active"
             self.lineNo = 0
 
@@ -100,7 +100,13 @@ class parkingNode(rclpy.node.Node):
     def scanner_callback(self, data):
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
-            space_detection = min(data.ranges[500:580]) < detection_distance
+            space_detection = data.ranges[540] > detection_distance
+
+            self.status_status.data = str(data.ranges[540])
+            self.status_publisher.publish(self.status_status)
+
+            self.get_logger().info("SPACE_DETECTION: " + str(data.ranges[540]))
+
             if space_detection:
                 self.status = "Parking"
                 self.parking.data = True
@@ -111,7 +117,8 @@ class parkingNode(rclpy.node.Node):
                 self.status = "Searching"
 
     def timer_callback(self):
-        if self.status == "Searching" '''and self.last_call == self.lineNo''' and 4 > self.lineNo > 0:
+        self.get_logger().info("TIMER " + self.status + " " + str(self.lineNo))
+        if self.status == "Searching" and 4 > self.lineNo > 0:
             self.status = "Scanning"
             self.lineNo += 1
             #self.last_call += 1
@@ -125,7 +132,7 @@ class parkingNode(rclpy.node.Node):
         self.last_path_cmd = msg
 
     def park(self):
-        self.turn90Deg(False)
+        self.turn90Deg(True)
 
         # drive forward
         twist = Twist()
@@ -133,16 +140,16 @@ class parkingNode(rclpy.node.Node):
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(True)
+        self.turn90Deg(False)
         self.stop()
         sleep(11)
-        self.turn90Deg(True)
+        self.turn90Deg(False)
 
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(False)
+        self.turn90Deg(True)
         self.parking.data = False
         self.notice_publisher.publish(self.parking)
 

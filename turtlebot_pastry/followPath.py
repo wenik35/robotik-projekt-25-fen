@@ -17,7 +17,7 @@ class followPathNode(rclpy.node.Node):
         # definition of the parameters that can be changed at runtime
         self.declare_parameter('max_line_offset', 300)
         self.declare_parameter('steering_quotient', 10)
-        self.declare_parameter('speed_drive', 0.15)
+        self.declare_parameter('speed_drive', 0.05)
 
         # definition of the QoS in order to receive data despite WiFi
         qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
