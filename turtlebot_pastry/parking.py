@@ -71,7 +71,7 @@ class parkingNode(rclpy.node.Node):
         self.status_publisher.publish(self.status_status)
 
     def sign_callback(self, data):
-        if data == 0:
+        if data.data == 0:
             self.status = "Active"
             self.lineNo = 0
 
