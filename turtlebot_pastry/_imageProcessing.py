@@ -22,8 +22,8 @@ class imageProcessingNode(rclpy.node.Node):
         self.declare_parameter('line_expected_at', 550)
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
-        self.declare_parameter('threshold', 60)
-        self.declare_parameter('minLineLength', 20)
+        self.declare_parameter('threshold', 15)
+        self.declare_parameter('minLineLength', 10)
         self.declare_parameter('maxLineGap', 10)
 
         # init openCV-bridge
@@ -75,13 +75,13 @@ class imageProcessingNode(rclpy.node.Node):
         # publish driving info
         grayscale = cv2.cvtColor(cut_img, cv2.COLOR_BGR2GRAY)
         grayscale[0][0] = 255
-        offset = Int16()
-        offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
-        self.steering.publish(offset)
+        #offset = Int16()
+        #offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
+        #self.steering.publish(offset)
 
         # apply hough lines algorithm
         masked = region(edged)
-        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=50, minLineLength=11, maxLineGap=30))
+        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
@@ -92,7 +92,10 @@ class imageProcessingNode(rclpy.node.Node):
 
         # average lines and calculate driving info
         averaged = average(cut_img, filtered_lines)
-        steering = calculate_steering(averaged)
+        offset = Int16()
+        offset.data = int(calculate_steering(averaged))
+        self.steering.publish(offset)
+
 
         # display lanes
         display_averaged_lines = display_lines(edged2color, averaged, (0, 255, 0))
@@ -110,7 +113,7 @@ class imageProcessingNode(rclpy.node.Node):
         # detect parking bay
         height, width = edged.shape[:2]
         parking_bay_roi = edged[height-height//4:height, width-width//8:width]
-        parking_lines = unpack_lines(cv2.HoughLinesP(parking_bay_roi, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        parking_lines = unpack_lines(cv2.HoughLinesP(parking_bay_roi, rho=2, theta=np.pi/180, threshold=60, minLineLength=20, maxLineGap=10))
         parking_bay_roi_color = cv2.cvtColor(parking_bay_roi, cv2.COLOR_GRAY2BGR)
 
         display_parking_lines = display_lines(parking_bay_roi_color, parking_lines)
@@ -142,7 +145,7 @@ def filter_parking(lines):
 
 def region(image):
     height, width = image.shape[:2]
-    trapezoid = np.array([[0.3*width, height//3], [width - 0.3*width, height//3], [width, height], [0, height]], np.int32)
+    trapezoid = np.array([[0.3*width, 0], [width - 0.3*width, 0], [width, height], [0, height]], np.int32)
 
     mask = np.zeros_like(image)
     
