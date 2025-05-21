@@ -59,10 +59,16 @@ class parkingNode(rclpy.node.Node):
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
         self.parking = Bool()
         self.command_publisher = self.create_publisher(Twist, 'parking_cmd', qos_profile=qos_policy)
-
+        self.status_publisher = self.create_publisher(String, 'parking_status', qos_profile=qos_policy)
+        self.status_status = String()
+        self.status_timer = self.create_timer(1, self.status_callback)
         self.status = "Paused"
         self.lineNo = 0
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
+
+    def status_callback(self):
+        self.status_status.data = self.status
+        self.status_publisher.publish(self.status_status)
 
     def sign_callback(self, data):
         if data == 0:
