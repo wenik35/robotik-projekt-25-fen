@@ -32,7 +32,7 @@ class parkingNode(rclpy.node.Node):
         # create subscribers for image data with changed qos
         self.signSubscription = self.create_subscription(
             Int64,
-            '/sign_seen',
+            'sign_seen',
             self.sign_callback,
             qos_profile=qos_policy)
         self.signSubscription  # prevent unused variable warning
