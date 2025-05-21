@@ -59,6 +59,7 @@ class stateMachineNode(Node):
 
         # status variables
         self.changingLane = False
+        self.parking = False
         self.greenLight = True
         self.statusMessage = String()
 
@@ -71,7 +72,7 @@ class stateMachineNode(Node):
     def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
-        if((not self.changingLane) and self.greenLight and (not forbid_driving)):
+        if((not self.changingLane) and (not self.parking) and self.greenLight and (not forbid_driving)):
             self.cmd_vel.publish(msg)
 
     def trafficlight_callback(self, msg):
@@ -89,7 +90,7 @@ class stateMachineNode(Node):
     def lane_changer_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
-        if (self.changingLane and self.greenLight and not forbid_driving):
+        if (self.changingLane and self.greenLight and not forbid_driving and not self.parking):
             self.cmd_vel.publish(msg)
 
     def parking_notice_callback(self, msg):

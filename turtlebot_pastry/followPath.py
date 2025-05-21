@@ -17,7 +17,7 @@ class followPathNode(rclpy.node.Node):
         # definition of the parameters that can be changed at runtime
         self.declare_parameter('max_line_offset', 300)
         self.declare_parameter('steering_quotient', 10)
-        self.declare_parameter('speed_drive', 0.05)
+        self.declare_parameter('speed_drive', 0.15)
 
         # definition of the QoS in order to receive data despite WiFi
         qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
@@ -37,7 +37,7 @@ class followPathNode(rclpy.node.Node):
 
         # create timer to periodically invoke the driving logic
         #timer_period = 0.1  # seconds
-        #self.my_timer = self.create_timer(timer_period, self.timer_callback)    
+        #self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
     # driving logic
     def callback(self, msg):

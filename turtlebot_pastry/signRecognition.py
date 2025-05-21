@@ -247,9 +247,8 @@ class SignRecognitionNode(rclpy.node.Node):
                     print(i)
 
                 print(scores)
-                self.get_logger().info("SIGN FOUND!")
                 #cv2.imshow("Edged", edged)
-                
+
                 #cv2.imshow("CROPMASK", crop_mask)
                 #cv2.imshow("PRECISECROP2", precise_crop)
 

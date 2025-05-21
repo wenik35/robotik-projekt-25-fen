@@ -18,8 +18,8 @@ class parkingNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('parkingNode')
 
-        self.declare_parameter('detection_distance', 0.30)
-        self.declare_parameter('deadreconing_time', 8.0)
+        self.declare_parameter('detection_distance', 0.35)
+        self.declare_parameter('deadreconing_time', 2.1)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -72,11 +72,13 @@ class parkingNode(rclpy.node.Node):
 
     def sign_callback(self, data):
         if data.data == 0 and self.status == "Paused":
+            self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
             self.lineNo = 0
 
     def line_callback(self, data):
         if self.status == "Active":
+            self.get_logger().info("LINE FOUND")
             self.status = "Searching"
             timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
             #self.line_timer.cancel()
@@ -105,7 +107,7 @@ class parkingNode(rclpy.node.Node):
             self.status_status.data = str(data.ranges[540])
             self.status_publisher.publish(self.status_status)
 
-            self.get_logger().info("SPACE_DETECTION: " + str(data.ranges[540]))
+            self.get_logger().info("SPACE_DETECTION: " + str(data.ranges[540]) + str(space_detection))
 
             if space_detection:
                 self.status = "Parking"
@@ -123,7 +125,7 @@ class parkingNode(rclpy.node.Node):
             self.lineNo += 1
             #self.last_call += 1
 
-        elif self.lineNo == 4:
+        elif self.status == "Searching" and self.lineNo == 4:
             self.lineNo = 0
             self.status = "Paused"
 
@@ -132,7 +134,9 @@ class parkingNode(rclpy.node.Node):
         self.last_path_cmd = msg
 
     def park(self):
-        self.turn90Deg(True)
+        self.line_timer.cancel()
+        self.get_logger().info("PARKING")
+        self.turn90Deg(False)
 
         # drive forward
         twist = Twist()
@@ -140,21 +144,21 @@ class parkingNode(rclpy.node.Node):
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(False)
+        self.turn90Deg(True)
         self.stop()
         sleep(11)
-        self.turn90Deg(False)
+        self.turn90Deg(True)
 
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(True)
+        self.turn90Deg(False)
         self.parking.data = False
         self.notice_publisher.publish(self.parking)
 
         # stop, give back control to lane follower
-        self.status = "Paused"
+        self.status = "Dead"
 
 
     def turn90Deg(self, toLeft: bool):
@@ -166,10 +170,9 @@ class parkingNode(rclpy.node.Node):
         self.command_publisher.publish(twist)
 
         # wait until robot has turned 90 degrees
-        sleep(1.5)
+        sleep(1.7)
 
         # stop
-        self.command_publisher.publish(cached_cmd)
 
     def stop(self):
         twist = Twist()
