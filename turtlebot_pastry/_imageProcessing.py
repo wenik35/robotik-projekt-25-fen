@@ -63,13 +63,16 @@ class imageProcessingNode(rclpy.node.Node):
 
         # cut upper (uninteresting) half out
         height, width = img_cv.shape[:2]
-        cut_img = img_cv[height-height//3:height, 0:width]
+        cut_img = img_cv[height-height//2:height, 0:width]
 
-        # warp image to birds eye view
-        #warped = warp(cut_img)
+        bird_eye_view = get_birds_eye_view(cut_img)
+
+        cv2.imshow("og", bird_eye_view)
+        '''
+
 
         # use cv2 edge detection
-        edged = cv2.Canny(cut_img, canny_low, canny_high)
+        edged = cv2.Canny(cut_warped, canny_low, canny_high)
         edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
         # publish driving info
@@ -81,7 +84,7 @@ class imageProcessingNode(rclpy.node.Node):
 
         # apply hough lines algorithm
         masked = region(edged)
-        lines = unpack_lines(cv2.HoughLinesP(masked, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
@@ -107,8 +110,8 @@ class imageProcessingNode(rclpy.node.Node):
         raw_imgs = np.concatenate((cut_img, grayscale_color, masked_color), axis=0)
         lane_imgs = np.concatenate((lines_img, filtered_lines_img, lanes), axis=0)
         combined = np.concatenate((raw_imgs, lane_imgs), axis=1)
-        cv2.imshow("lanes", combined)
-
+#        cv2.imshow("og", cut_warped)
+        #cv2.imshow("lanes", combined)
 
         # detect parking bay
         height, width = edged.shape[:2]
@@ -127,8 +130,30 @@ class imageProcessingNode(rclpy.node.Node):
         #cv2.imshow("parking", combined_parking)
         if len(filtered_parking_lines) > 0:
             self.parking_line.publish(self.parking_message)
-
+        '''
         cv2.waitKey(1)
+
+def get_birds_eye_view(image):
+    padding = np.zeros_like(image)
+    blank = np.concatenate((padding, padding, padding), axis=1)
+    with_image = np.concatenate((padding, image, padding), axis=1)
+    padded = np.concatenate((blank, with_image, blank), axis=0)
+
+    height, width = padded.shape[:2]
+    third = width // 3
+    offset_bottom = 110
+    offset_top = 40
+
+    src = np.float32([[1230+offset_bottom, 480],  [750-offset_bottom, 480], [920-offset_top, 320], [1060+offset_top, 320]]) # The source points
+    dst = np.float32([[third*2, height], [third, height], [third, 0], [third*2, 0]]) # The destination points
+    transformation_matrix = cv2.getPerspectiveTransform(src, dst) # The transformation matrix
+
+    warped = cv2.warpPerspective(padded, transformation_matrix, (width, height)) # Image warping
+
+    height, width = warped.shape[:2]
+    cut_warped = warped[0:height, width//3:width-width//3]
+    
+    return cut_warped
 
 def filter_parking(lines):
     result = []
@@ -153,17 +178,6 @@ def region(image):
     mask = cv2.bitwise_and(image, mask)
     return mask
 
-def warp(image):
-    height, width = image.shape[:2]
-
-    src = np.float32([[width*0.5, 0],  [width, height], [0, height]]) # The source points
-    dst = np.float32([[0, 0], [width, 0], [width, height], [0, height]]) # The destination points
-    transformation_matrix = cv2.getPerspectiveTransform(src, dst) # The transformation matrix
-
-    warped_img = cv2.warpPerspective(image, transformation_matrix, (width, height)) # Image warping
-
-    return warped_img
-
 def unpack_lines(lines):
     unpacked = []
 
@@ -182,7 +196,7 @@ def filter_lines(grayscale, lines):
         for line in lines:
             middle = get_middle_point(line)
 
-            if grayscale[middle[1]][(middle[0] + 3) % width] > 140:
+            if grayscale[(middle[0] + 3) % width, middle[1]] > 140:
                 left.append(line)
             else:
                 right.append(line)

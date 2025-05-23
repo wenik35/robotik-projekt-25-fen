@@ -49,6 +49,7 @@ class stateMachineNode(Node):
         self.changingLane = False
         self.greenLight = True
         self.statusMessage = String()
+        self.get_logger().info("State machine node initialized")
 
         # publisher for state info
         self.status = self.create_publisher(String, 'status', 10)
