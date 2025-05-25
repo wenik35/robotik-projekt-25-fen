@@ -20,11 +20,11 @@ class imageProcessingNode(rclpy.node.Node):
         super().__init__('imageProcessingNode')
 
         self.declare_parameter('line_expected_at', 550)
-        self.declare_parameter('canny_high', 400)
-        self.declare_parameter('canny_low', 150)
-        self.declare_parameter('threshold', 15)
-        self.declare_parameter('minLineLength', 10)
-        self.declare_parameter('maxLineGap', 10)
+        self.declare_parameter('canny_high', 200)
+        self.declare_parameter('canny_low', 100)
+        self.declare_parameter('threshold', 60)
+        self.declare_parameter('minLineLength', 30)
+        self.declare_parameter('maxLineGap', 20)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -65,32 +65,31 @@ class imageProcessingNode(rclpy.node.Node):
         height, width = img_cv.shape[:2]
         cut_img = img_cv[height-height//2:height, 0:width]
 
-        bird_eye_view = get_birds_eye_view(cut_img)
+        birds_eye_view = get_birds_eye_view(cut_img)
 
-        cv2.imshow("og", bird_eye_view)
-        '''
-
+        #grayscale = cv2.cvtColor(bird_eye_view, cv2.COLOR_BGR2GRAY)
+        #normalizedGrayscale = np.zeros_like(grayscale)
+        #normalizedGrayscale = cv2.normalize(grayscale,  normalizedGrayscale, 0, 255, cv2.NORM_MINMAX)
 
         # use cv2 edge detection
-        edged = cv2.Canny(cut_warped, canny_low, canny_high)
+        edged = cv2.Canny(birds_eye_view, canny_low, canny_high)
+        edged = remove_image_edges(edged)
         edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
+
         # publish driving info
-        grayscale = cv2.cvtColor(cut_img, cv2.COLOR_BGR2GRAY)
-        grayscale[0][0] = 255
         #offset = Int16()
         #offset.data = analyseImageRow(edged, grayscale, line_expect_at_param)
         #self.steering.publish(offset)
 
         # apply hough lines algorithm
-        masked = region(edged)
         lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
         # filter out line the do not belong to lanes
-        filtered_lines = filter_lines(grayscale, lines)
-        display_filtered_lines = display_lines(edged2color, filtered_lines)
+        filtered_lines = filter_lines(lines)
+        display_filtered_lines = display_lines(edged2color, filtered_lines, (255, 0, 0))
         filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
         # average lines and calculate driving info
@@ -105,13 +104,9 @@ class imageProcessingNode(rclpy.node.Node):
         lanes = cv2.addWeighted(edged2color, 0.8, display_averaged_lines, 1, 10)
 
         # show combined images
-        grayscale_color = cv2.cvtColor(grayscale, cv2.COLOR_GRAY2BGR)
-        masked_color = cv2.cvtColor(masked, cv2.COLOR_GRAY2BGR)
-        raw_imgs = np.concatenate((cut_img, grayscale_color, masked_color), axis=0)
         lane_imgs = np.concatenate((lines_img, filtered_lines_img, lanes), axis=0)
-        combined = np.concatenate((raw_imgs, lane_imgs), axis=1)
-#        cv2.imshow("og", cut_warped)
-        #cv2.imshow("lanes", combined)
+        #cv2.imshow("og", cut_warped)
+        cv2.imshow("lanes", lane_imgs)
 
         # detect parking bay
         height, width = edged.shape[:2]
@@ -130,7 +125,7 @@ class imageProcessingNode(rclpy.node.Node):
         #cv2.imshow("parking", combined_parking)
         if len(filtered_parking_lines) > 0:
             self.parking_line.publish(self.parking_message)
-        '''
+
         cv2.waitKey(1)
 
 def get_birds_eye_view(image):
@@ -151,7 +146,7 @@ def get_birds_eye_view(image):
     warped = cv2.warpPerspective(padded, transformation_matrix, (width, height)) # Image warping
 
     height, width = warped.shape[:2]
-    cut_warped = warped[0:height, width//3:width-width//3]
+    cut_warped = warped[height//2:height, width//4:width-width//4]
     
     return cut_warped
 
@@ -168,14 +163,12 @@ def filter_parking(lines):
     return np.array(result)
 
 
-def region(image):
+def remove_image_edges(image):
     height, width = image.shape[:2]
-    trapezoid = np.array([[0.3*width, 0], [width - 0.3*width, 0], [width, height], [0, height]], np.int32)
-
-    mask = np.zeros_like(image)
+    left_area = np.array([[0, 190], [0, 205], [150, height], [170, height]], np.int32)
+    right_area = np.array([[width, 70], [width, 100], [740, height], [755, height]], np.int32)
     
-    mask = cv2.fillPoly(mask, [trapezoid], 255)
-    mask = cv2.bitwise_and(image, mask)
+    mask = cv2.fillPoly(image, [left_area, right_area], 0)
     return mask
 
 def unpack_lines(lines):
@@ -186,7 +179,49 @@ def unpack_lines(lines):
             unpacked.append(line[0])
     return unpacked
 
-def filter_lines(grayscale, lines):
+def filter_lines(lines):
+    result = []
+    print("Number of lines: ", len(lines))
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line
+            if (not x1 == x2) and (not y1 == y2):
+                slope1, y_int1 = np.polyfit((x1, x2), (y1, y2), 1)
+                middle = get_middle_point(line)
+
+                # get norm of line
+                norm_slope = -1 / slope1
+                norm_y_int = middle[1] - norm_slope * middle[0]
+                # calculate intersection of norm with other lines
+                for line2 in lines:
+                    x1, y1, x2, y2 = line2
+
+                    # correct for vertical and horizontal lines
+                    if x1 == x2:
+                        x1, x2 = x1 - 1, x2 + 1
+                    if y1 == y2:
+                        y1, y2 = y1 - 1, y2 + 1
+                    
+                    slope2, y_int2 = np.polyfit((x1, x2), (y1, y2), 1)
+
+                    # calculate intersection
+                    if slope1 != slope2:
+                        x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
+                        y = int(norm_slope * x + norm_y_int)
+                        
+                        distance = np.linalg.norm([x - middle[0], y - middle[1]])
+                        angle_diff = abs(line_angle(line) - line_angle(line2))
+                        #print("Line1:", line, " Line2: ", line2, " Distance:", distance, " Angle difference:", angle_diff)
+
+                        # check if intersection is in correct distance and lines are similarly angled
+                        if 18 < distance < 30 and angle_diff < 2:
+                            result.append(line)
+    
+    # remove duplicates
+    result = np.unique(np.array(result), axis=0)
+    return result
+
+def filter_lines_legacy(grayscale, lines):
     height, width = grayscale.shape[:2]
     result = []
     # classify as left bound or right bound
@@ -195,8 +230,11 @@ def filter_lines(grayscale, lines):
     if lines is not None:
         for line in lines:
             middle = get_middle_point(line)
+            brightness_right =  grayscale[(middle[1] + 10) % width, middle[0]]
+            brightness_left =  grayscale[(middle[1] - 10) % width, middle[0]]
 
-            if grayscale[(middle[0] + 3) % width, middle[1]] > 140:
+
+            if brightness_right > brightness_left:
                 left.append(line)
             else:
                 right.append(line)
@@ -233,7 +271,7 @@ def filter_lines(grayscale, lines):
             else:
                 groups.append(potential_partner[0])
 
-    return groups
+    return [left, right]
 
 def calculate_steering(lines):
     left = lines[0]
@@ -319,10 +357,10 @@ def average(image, lines):
                 slope = parameters[0]
                 y_int = parameters[1]
 
-                if slope < 0 and x1 < width//2:
+                if x1 < width//2:
                     left.append((slope, y_int))
 
-                if slope > 0 and x1 > width//2:
+                if x1 > width//2:
                     right.append((slope, y_int))
 
     left_line = []
