@@ -7,6 +7,7 @@ import rclpy.node
 import cv2
 import numpy as np
 import math
+import time
 from random import randrange
 
 from std_msgs.msg import Int16, String
@@ -20,11 +21,11 @@ class imageProcessingNode(rclpy.node.Node):
         super().__init__('imageProcessingNode')
 
         self.declare_parameter('line_expected_at', 550)
-        self.declare_parameter('canny_high', 200)
-        self.declare_parameter('canny_low', 100)
-        self.declare_parameter('threshold', 60)
+        self.declare_parameter('canny_high', 300)
+        self.declare_parameter('canny_low', 150)
+        self.declare_parameter('threshold', 80)
         self.declare_parameter('minLineLength', 30)
-        self.declare_parameter('maxLineGap', 20)
+        self.declare_parameter('maxLineGap', 10)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -67,7 +68,7 @@ class imageProcessingNode(rclpy.node.Node):
 
         birds_eye_view = get_birds_eye_view(cut_img)
 
-        #grayscale = cv2.cvtColor(bird_eye_view, cv2.COLOR_BGR2GRAY)
+        #grayscale = cv2.cvtColor(birds_eye_view, cv2.COLOR_BGR2GRAY)
         #normalizedGrayscale = np.zeros_like(grayscale)
         #normalizedGrayscale = cv2.normalize(grayscale,  normalizedGrayscale, 0, 255, cv2.NORM_MINMAX)
 
@@ -182,43 +183,65 @@ def unpack_lines(lines):
 def filter_lines(lines):
     result = []
     print("Number of lines: ", len(lines))
+    startlol = time.time_ns()
     if lines is not None:
+
+        line_data = []
         for line in lines:
             x1, y1, x2, y2 = line
-            if (not x1 == x2) and (not y1 == y2):
-                slope1, y_int1 = np.polyfit((x1, x2), (y1, y2), 1)
-                middle = get_middle_point(line)
 
-                # get norm of line
-                norm_slope = -1 / slope1
-                norm_y_int = middle[1] - norm_slope * middle[0]
-                # calculate intersection of norm with other lines
-                for line2 in lines:
-                    x1, y1, x2, y2 = line2
+            # correct for vertical lines
+            if x1 == x2:
+                x1, x2 = x1 - 1, x2 + 1
+            if y1 == y2:
+                y1, y2 = y1 - 1, y2 + 1
 
-                    # correct for vertical and horizontal lines
-                    if x1 == x2:
-                        x1, x2 = x1 - 1, x2 + 1
-                    if y1 == y2:
-                        y1, y2 = y1 - 1, y2 + 1
+            angle = line_angle(line)
+
+            # filter out lines that are too flat
+            if angle < 50:
+                continue
+
+            slope = (y2-y1) / (x2-x1)
+            y_int = y1 - slope * x1
+
+            line_data.append((line, (slope, y_int), angle))
+
+        for data in line_data:
+            line = data[0]
+            slope1, y_int1 = data[1]
+
+            middle = get_middle_point(line)
+
+            # get norm of line
+            norm_slope = -1 / slope1
+            norm_y_int = middle[1] - norm_slope * middle[0]
+
+            # calculate intersection of norm with other lines
+            for data2 in line_data:
+                start = time.time_ns()
+                line2 = data2[0]
+                slope2, y_int2 = data2[1]
+
+                # calculate intersection
+                if (slope1 != slope2) and (slope2 - norm_slope > 0.0001):  # avoid division by zero
+                    x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
+                    y = int(norm_slope * x + norm_y_int)
                     
-                    slope2, y_int2 = np.polyfit((x1, x2), (y1, y2), 1)
+                    distance = np.linalg.norm([x - middle[0], y - middle[1]])
 
-                    # calculate intersection
-                    if slope1 != slope2:
-                        x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
-                        y = int(norm_slope * x + norm_y_int)
-                        
-                        distance = np.linalg.norm([x - middle[0], y - middle[1]])
-                        angle_diff = abs(line_angle(line) - line_angle(line2))
-                        #print("Line1:", line, " Line2: ", line2, " Distance:", distance, " Angle difference:", angle_diff)
+                    # this is shit
+                    angle_diff = abs(data[2] - data2[2])
 
-                        # check if intersection is in correct distance and lines are similarly angled
-                        if 18 < distance < 30 and angle_diff < 2:
-                            result.append(line)
+                    # check if intersection is in correct distance and lines are similarly angled
+                    if 18 < distance < 30 and angle_diff < 2:
+                        result.append(line)
     
     # remove duplicates
+    print("Filtering lines took", (time.time_ns() - startlol), "ns")
+
     result = np.unique(np.array(result), axis=0)
+    print("\n")
     return result
 
 def filter_lines_legacy(grayscale, lines):
