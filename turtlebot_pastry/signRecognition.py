@@ -172,8 +172,8 @@ class SignRecognitionNode(rclpy.node.Node):
             crop_mask = mask[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
             precise_crop = crop_img[max(crop_up-buffer, 0) : min(crop_down, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
 
-            cv2.imshow("MASK", mask)
-            cv2.imshow("PRECISECROP", precise_crop)
+            # cv2.imshow("MASK", mask)
+            # cv2.imshow("PRECISECROP", precise_crop)
 
             img_width = precise_crop.shape[1]
             img_height = precise_crop.shape[0]
@@ -250,7 +250,7 @@ class SignRecognitionNode(rclpy.node.Node):
                 #cv2.imshow("Edged", edged)
 
                 #cv2.imshow("CROPMASK", crop_mask)
-                #cv2.imshow("PRECISECROP2", precise_crop)
+                cv2.imshow("PRECISECROP2", precise_crop)
 
         #cv2.imshow("CROP", crop_img)
 

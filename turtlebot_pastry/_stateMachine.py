@@ -51,7 +51,7 @@ class stateMachineNode(Node):
             self.parking_notice_callback,
             qos_profile=qos_policy)
 
-        self.laneChangeCommandSub = self.create_subscription(
+        self.parkingCommandSub = self.create_subscription(
             Twist,
             'parking_cmd',
             self.parking_callback,

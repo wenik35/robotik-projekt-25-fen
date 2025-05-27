@@ -17,8 +17,14 @@ def generate_launch_description():
         ),
         Node(
             package='turtlebot_pastry',
-            executable='detectObstacle',
-            name='detectObstacle',
+            executable='imageProcessing',
+            name='imageProcessing',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='changeLaneAtObstacle',
+            name='changeLaneAtObstacle',
             output='screen'
         ),
         Node(

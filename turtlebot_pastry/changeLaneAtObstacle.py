@@ -39,6 +39,12 @@ class changeLaneNode(Node):
             self.follow_line_callback,
             qos_profile=qos_policy)
 
+        self.parkingNoticeSub = self.create_subscription(
+            Bool,
+            'parking_in_process',
+            self.parking_notice_callback,
+            qos_profile=qos_policy)
+
         # publisher for driving commands
         self.notice_publisher = self.create_publisher(Bool, 'lane_change_in_process', qos_profile=qos_policy)
         self.laneChange = Bool()
@@ -57,36 +63,36 @@ class changeLaneNode(Node):
         if self.status == "Driving right":
             # detection
             front_detection = msg.ranges[0] < detection_distance
-            
+
             # message
             if (front_detection):
                 self.status = "Changing lane"
                 self.laneChange.data = True
                 self.notice_publisher.publish(self.laneChange)
-                
+
                 self.changeLane(toLeft=True)
 
         if self.status == "Driving left":
             if (self.lastDistanceRight != float("inf")):
                 right_detection = 0.4 < msg.ranges[540] - self.lastDistanceRight
                 sleep(1)
-                
+
                 # message
                 if (right_detection):
                     self.status = "Changing lane"
                     self.laneChange.data = True
                     self.notice_publisher.publish(self.laneChange)
-                    
+
                     self.changeLane(toLeft=False)
 
         self.lastDistanceRight = msg.ranges[540]
 
     def follow_line_callback(self, msg):
         self.last_path_cmd = msg
-    
+
     def changeLane(self, toLeft: bool):
         self.turn90Deg(toLeft)
-        
+
         # drive forward
         twist = Twist()
         twist.linear.x = 0.2
@@ -117,6 +123,12 @@ class changeLaneNode(Node):
 
         # stop
         self.command_publisher.publish(cached_cmd)
+
+    def parking_notice_callback(self, msg):
+        if msg.data == True:
+            self.status = "Parking"
+        else:
+            self.status = "Driving right"
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, changeLaneNode)
