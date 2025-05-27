@@ -58,7 +58,7 @@ class stateMachineNode(Node):
     def follower_callback(self, msg):
 
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
-        if(self.allowedToDrive and self.greenLight and not forbid_driving)):
+        if(self.allowedToDrive and self.greenLight and not forbid_driving):
             msg = msg
             self.cmd_vel.publish(msg)
         else:
