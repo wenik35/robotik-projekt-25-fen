@@ -115,98 +115,72 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # convert to HSV
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
-        #print(crop_img[30, 100])
-        #print(hsv_img[30, 100])
         mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
 
         cv2.imshow("M0", mask)
+
         # blurring mask to remove artifacts
-        scalar = 10
+        scalar = 8
         mask = cv2.resize(mask, (img_width//scalar, img_height//scalar))
-        mask = cv2.resize(mask, (img_width, img_height))
-
-        cv2.imshow("MASK", mask)
-
-        if np.amax(mask > 0):       # Only do when blue is found
+        mask = cv2.resize(mask, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
             # do fine crop
-            crop_up = 0
-            crop_down = img_height
-            crop_left = 0
-            crop_right = img_width
-            sensitivity = .95
-            for i in range(img_height):
-                #print(i)
-                if(np.max(mask[i]) > sensitivity):
-                    crop_up = i
-                    break
+        sensitivity = 140
+        threshold = 1800
 
-            for i in range(img_height-1, -1, -1):
-                #print(i)
-                if(np.max(mask[i]) > sensitivity):
-                    crop_down = i
-                    break
+        bright_mask =  cv2.inRange(mask, sensitivity, 255)
+        row_counts = np.sum(bright_mask, axis=1) // threshold
+        col_counts = np.sum(bright_mask, axis=0) // threshold
 
-            for i in range(img_width):
-                #print(i)
-                if(np.max(mask[:,i]) > sensitivity):
-                    crop_left = i
-                    break
-
-            for i in range(img_width-1, -1, -1):
-                #print(i)
-                #print(len(mask[0]))
-                if(np.max(mask[:,i]) > sensitivity):
-                    crop_right = i
-                    break
-
-            #print("crop_up: ", crop_up)
-            #print("crop_down: ", crop_down)
-            #print("crop_left: ", crop_left)
-            #print("crop_right: ", crop_right)
-
-            crop_mask = mask[max(crop_up, 0) : min(crop_down, img_height), max(crop_left, 0) : min(crop_right, img_width)]
-            precise_crop = crop_img[max(crop_up, 0) : min(crop_down, img_height), max(crop_left, 0) : min(crop_right, img_width)]
-            cv2.imshow("M2", crop_mask)
+        rows_nz = np.nonzero(row_counts)[0] - 1
+        cols_nz = np.nonzero(col_counts)[0] - 1
+        cv2.imshow("M1", mask)
 
 
-            img_width = precise_crop.shape[1]
-            img_height = precise_crop.shape[0]
+        if np.sum(rows_nz) > 0 and sum(cols_nz) > 0:       # Only do when blue is found
+            cv2.imshow("K", crop_img)
 
+            padding = 5
+            mask = mask[rows_nz[0] : rows_nz[-1], cols_nz[0] : cols_nz[-1]]
+            precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1]), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding // 2))]
+
+            cv2.imshow("I", precise_crop)
             #hsv_img = cv2.cvtColor(precise_crop, cv2.COLOR_BGR2HSV)
 
             # find blue
             #mask2 = cv2.inRange(img_resize, lower_bound, upper_bound)
             
-            if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
-                cv2.imshow("I", precise_crop)
-                precise_crop = cv2.resize(precise_crop, (100, 100))
-                edged = cv2.resize(cv2.Canny(precise_crop, 50, 200), (100,100))
+            if mask.shape[0] > 0 and mask.shape[1] > 0:
+                precise_crop2 = cv2.resize(precise_crop, (100, 100))
                 #compare to test images
                 scores = []
                 for i in self.image_list:
                 #for i in self.crop_list:
                     #i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
-                    scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
+                    scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
                     
                     #scores.append(structural_similarity(i, edged, gaussian_weighcrop, lower_bound, upper_bound), gaussian_weights=True, multichannel=True))
 
                 scores = np.array(scores)
+                #self.get_logger().info(str(scores))
+
 
                 #find best match
                 i = np.argmax(scores)
-                if scores[i] > 0.20:
+                if scores[i] > 0.2:
                     msg = Int64()
                     msg.data = int(i)
                     self.publisher_.publish(msg)
                     self.get_logger().info(str(i))
-
+                
                 #cv2.imshow("Edged", edged)
 
                 #cv2.imshow("CROPMASK", crop_mask)
-                cv2.imshow("PRECISECROP2", precise_crop)
+                #cv2.imshow("PRECISECROP2", precise_crop2)
 
+            
         #cv2.imshow("CROP", crop_img)
+        #cv2.imshow("MO", mask)
 
         cv2.waitKey(1)
 
