@@ -3,6 +3,7 @@ import rclpy.node
 import cv2
 import numpy as np
 
+from enum import Enum
 from std_msgs.msg import Int64
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
@@ -12,6 +13,14 @@ from skimage.metrics import structural_similarity
 
 
 class SignRecognitionNode(rclpy.node.Node):
+
+    class SignType(Enum):
+        PARKING = 0
+        GO_STRAIGHT = 1
+        TURN_LEFT = 2
+        TURN_RIGHT = 3
+        CROSSWALK = 4
+
 
     def __init__(self):
         super().__init__('SignRecognitionNode')
@@ -138,11 +147,10 @@ class SignRecognitionNode(rclpy.node.Node):
 
 
         if np.sum(rows_nz) > 0 and sum(cols_nz) > 0:       # Only do when blue is found
-            cv2.imshow("K", crop_img)
-
             padding = 5
-            mask = mask[rows_nz[0] : rows_nz[-1], cols_nz[0] : cols_nz[-1]]
-            precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1]), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding // 2))]
+            mask = mask[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding // 1))]
+            precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding // 1))]
+            cv2.imshow("M2", mask)
 
             cv2.imshow("I", precise_crop)
             #hsv_img = cv2.cvtColor(precise_crop, cv2.COLOR_BGR2HSV)
@@ -167,11 +175,12 @@ class SignRecognitionNode(rclpy.node.Node):
 
                 #find best match
                 i = np.argmax(scores)
-                if scores[i] > 0.2:
+                if scores[i] > 0.0:
                     msg = Int64()
                     msg.data = int(i)
                     self.publisher_.publish(msg)
-                    self.get_logger().info(str(i))
+                    t = (self.SignType(i))
+                    self.get_logger().info(str(t))
                 
                 #cv2.imshow("Edged", edged)
 
@@ -180,7 +189,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
             
         #cv2.imshow("CROP", crop_img)
-        #cv2.imshow("MO", mask)
 
         cv2.waitKey(1)
 
