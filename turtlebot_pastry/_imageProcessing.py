@@ -309,11 +309,11 @@ def calculate_steering(lines, image_width):
     if len(left) == len(right) == 0:
         return 0
     elif len(left) == 0:
-        angle = line_angle(right) - 90
-        offset = image_width / 2 - right[0] - 220
+        angle = 90 - line_angle(right)
+        offset = image_width / 2 - right[0] + 220
     elif len(right) == 0:
-        angle = line_angle(left) - 90
-        offset = image_width / 2 - left[0] + 220
+        angle = 90 - line_angle(left)
+        offset = image_width / 2 - left[0] - 220
     else :
         x1_left, y1, x2, y2 = left
         slope_left, y_int_left = np.polyfit((x1_left, x2), (y1, y2), 1)
@@ -329,11 +329,12 @@ def calculate_steering(lines, image_width):
         if (slope_right > 0):
             right_angle = 180 - right_angle
 
-        angle = (left_angle + right_angle) / 2 - 90
+        angle = 90 - (left_angle + right_angle) / 2
 
         offset = image_width / 2 - (x1_left + x1_right) / 2
     
-    return angle + offset / 5
+    print("Angle: ", angle, "Offset: ", offset)
+    return (angle + offset) / 4
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line 
@@ -407,8 +408,6 @@ def average(image, lines):
     if len(right) > 0:
         right_avg = np.average(right, axis=0)
         right_line = make_points(image, right_avg)
-
-    print("Left: ", len(left), "Right: ", len(right))
 
     return [left_line, right_line]
 
