@@ -309,10 +309,10 @@ def calculate_steering(lines, image_width):
     if len(left) == len(right) == 0:
         return 0
     elif len(left) == 0:
-        angle = 90 - line_angle(right)
+        angle = line_angle(right) - 90
         offset = image_width / 2 - right[0] - 220
     elif len(right) == 0:
-        angle = 90 - line_angle(left) 
+        angle = line_angle(left) - 90
         offset = image_width / 2 - left[0] + 220
     else :
         x1_left, y1, x2, y2 = left
@@ -329,11 +329,11 @@ def calculate_steering(lines, image_width):
         if (slope_right > 0):
             right_angle = 180 - right_angle
 
-        angle = 90 - (left_angle + right_angle) / 2
+        angle = (left_angle + right_angle) / 2 - 90
 
         offset = image_width / 2 - (x1_left + x1_right) / 2
     
-    return angle + offset / 10
+    return angle + offset / 5
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line 
