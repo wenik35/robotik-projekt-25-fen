@@ -53,7 +53,7 @@ class followPathNode(rclpy.node.Node):
         if (abs(line_offset) < max_offset):
             # self.line_offset has to be divided by a large number to make steering less jerky
             # self.line_offset has to be multiplied by -1 to invert left/right
-            turn = speed_drive * (line_offset / steering_quotient) * -1
+            turn = speed_drive * (line_offset / steering_quotient)
 
             # create message
             msg = Twist()

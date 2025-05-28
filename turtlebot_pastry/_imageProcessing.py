@@ -24,7 +24,7 @@ class imageProcessingNode(rclpy.node.Node):
         self.declare_parameter('canny_high', 300)
         self.declare_parameter('canny_low', 150)
         self.declare_parameter('threshold', 80)
-        self.declare_parameter('minLineLength', 30)
+        self.declare_parameter('minLineLength', 20)
         self.declare_parameter('maxLineGap', 10)
 
         # init openCV-bridge
@@ -94,10 +94,12 @@ class imageProcessingNode(rclpy.node.Node):
         filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
         # average lines and calculate driving info
-        averaged = average(cut_img, filtered_lines)
-        offset = Int16()
-        offset.data = int(calculate_steering(averaged))
-        self.steering.publish(offset)
+        averaged = average(edged, filtered_lines)
+        steering_factor = calculate_steering(averaged, edged.shape[1])
+        if not steering_factor == 0:
+            steering_msg = Int16()
+            steering_msg.data = int(steering_factor)
+            self.steering.publish(steering_msg)
 
 
         # display lanes
@@ -182,11 +184,12 @@ def unpack_lines(lines):
 
 def filter_lines(lines):
     result = []
-    print("Number of lines: ", len(lines))
+    #print("Number of lines: ", len(lines))
     startlol = time.time_ns()
     if lines is not None:
 
         line_data = []
+
         for line in lines:
             x1, y1, x2, y2 = line
 
@@ -224,7 +227,7 @@ def filter_lines(lines):
                 slope2, y_int2 = data2[1]
 
                 # calculate intersection
-                if (slope1 != slope2) and (slope2 - norm_slope > 0.0001):  # avoid division by zero
+                if (slope1 != slope2) and (abs(slope2 - norm_slope) > 0.0001):  # avoid division by zero
                     x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
                     y = int(norm_slope * x + norm_y_int)
                     
@@ -234,14 +237,11 @@ def filter_lines(lines):
                     angle_diff = abs(data[2] - data2[2])
 
                     # check if intersection is in correct distance and lines are similarly angled
-                    if 18 < distance < 30 and angle_diff < 2:
+                    if 15 < distance < 30 and angle_diff < 20:
                         result.append(line)
     
-    # remove duplicates
-    print("Filtering lines took", (time.time_ns() - startlol), "ns")
-
     result = np.unique(np.array(result), axis=0)
-    print("\n")
+    #print("\n")
     return result
 
 def filter_lines_legacy(grayscale, lines):
@@ -296,32 +296,44 @@ def filter_lines_legacy(grayscale, lines):
 
     return [left, right]
 
-def calculate_steering(lines):
+def calculate_steering(lines, image_width):
+    # Left x: 263 Right x: 710
+    # Image width: 960 Half width: 480 Calculated middle: 486
+    # links positiv, rechts negativ
     left = lines[0]
     right = lines[1]
+
+    angle = 0
+    offset = 0
 
     if len(left) == len(right) == 0:
         return 0
     elif len(left) == 0:
-        return 90 - line_angle(right)
+        angle = 90 - line_angle(right)
+        offset = image_width / 2 - right[0] - 220
     elif len(right) == 0:
-        return 90 - line_angle(left) 
+        angle = 90 - line_angle(left) 
+        offset = image_width / 2 - left[0] + 220
     else :
-        x1, y1, x2, y2 = left
-        slope_left, y_int_left = np.polyfit((x1, x2), (y1, y2), 1)
+        x1_left, y1, x2, y2 = left
+        slope_left, y_int_left = np.polyfit((x1_left, x2), (y1, y2), 1)
 
-        x1, y1, x2, y2 = right 
-        slope_right, y_int_right = np.polyfit((x1, x2), (y1, y2), 1)
+        x1_right, y1, x2, y2 = right 
+        slope_right, y_int_right = np.polyfit((x1_right, x2), (y1, y2), 1)
 
         left_angle = line_angle(left)
-        if (slope_left < 0):
+        if (slope_left > 0):
             left_angle = 180 - left_angle
 
         right_angle = line_angle(right)
         if (slope_right > 0):
             right_angle = 180 - right_angle
 
-        return 90 - (left_angle + right_angle) // 2
+        angle = 90 - (left_angle + right_angle) / 2
+
+        offset = image_width / 2 - (x1_left + x1_right) / 2
+    
+    return angle + offset / 10
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line 
@@ -395,6 +407,8 @@ def average(image, lines):
     if len(right) > 0:
         right_avg = np.average(right, axis=0)
         right_line = make_points(image, right_avg)
+
+    print("Left: ", len(left), "Right: ", len(right))
 
     return [left_line, right_line]
 
