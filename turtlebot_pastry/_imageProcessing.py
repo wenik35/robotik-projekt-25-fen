@@ -101,15 +101,15 @@ class imageProcessingNode(rclpy.node.Node):
             steering_msg.data = int(steering_factor)
             self.steering.publish(steering_msg)
 
-
         # display lanes
         display_averaged_lines = display_lines(edged2color, averaged, (0, 255, 0))
-        lanes = cv2.addWeighted(edged2color, 0.8, display_averaged_lines, 1, 10)
+        lanes = cv2.addWeighted(filtered_lines_img, 0.8, display_averaged_lines, 1, 10)
 
         # show combined images
-        lane_imgs = np.concatenate((lines_img, filtered_lines_img, lanes), axis=0)
-        #cv2.imshow("og", cut_warped)
+        lane_imgs = np.concatenate((birds_eye_view, lines_img, lanes), axis=0)
         cv2.imshow("lanes", lane_imgs)
+
+
 
         # detect parking bay
         height, width = edged.shape[:2]
@@ -184,8 +184,7 @@ def unpack_lines(lines):
 
 def filter_lines(lines):
     result = []
-    #print("Number of lines: ", len(lines))
-    startlol = time.time_ns()
+    start = time.time_ns()
     if lines is not None:
 
         line_data = []
@@ -241,7 +240,6 @@ def filter_lines(lines):
                         result.append(line)
     
     result = np.unique(np.array(result), axis=0)
-    #print("\n")
     return result
 
 def filter_lines_legacy(grayscale, lines):
@@ -300,7 +298,7 @@ def calculate_steering(lines, image_width):
     # Left x: 263 Right x: 710
     # Image width: 960 Half width: 480 Calculated middle: 486
     # links positiv, rechts negativ
-    left = lines[0]
+    left = lines[0]    
     right = lines[1]
 
     angle = 0
@@ -332,8 +330,7 @@ def calculate_steering(lines, image_width):
         angle = 90 - (left_angle + right_angle) / 2
 
         offset = image_width / 2 - (x1_left + x1_right) / 2
-    
-    print("Angle: ", angle, "Offset: ", offset)
+
     return (angle + offset) / 4
 
 def get_middle_point(line):
@@ -354,16 +351,11 @@ def display_lines(image, lines, color=None):
     random_color = (color == None)
     if lines is not None:
         for line in lines:
-            try:
-                if (len(line) > 0):
-                    if random_color:
-                        color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
-                    x1, y1, x2, y2 = line 
-                    cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
-            except Exception as e:
-                print("Error in display_lines: ", e)
-                print(line)
-                continue
+            if (len(line) > 0):
+                if random_color:
+                    color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
+                x1, y1, x2, y2 = line 
+                cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
 
     return lines_image
 
@@ -412,17 +404,14 @@ def average(image, lines):
     return [left_line, right_line]
 
 def make_points(image, line):
-    try:
-        slope, y_int = line 
-        if not (slope == 0.0):  #TODO: why?
-            y1 = image.shape[0]
-            y2 = 0
-            x1 = int((y1 - y_int) // slope)
-            x2 = int((y2 - y_int) // slope)
-            return [x1, y1, x2, y2]
-    except Exception as e:
-        print("Error in make_points: ", e)
-        print(line)
+    slope, y_int = line
+    if not (abs(slope) < 0.00001):
+        y1 = image.shape[0]
+        y2 = 0
+        x1 = int((y1 - y_int) // slope)
+        x2 = int((y2 - y_int) // slope)
+        return [x1, y1, x2, y2]
+    else:
         return []
 
 def line_angle(line):
