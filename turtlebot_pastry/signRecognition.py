@@ -64,14 +64,12 @@ class SignRecognitionNode(rclpy.node.Node):
         timer_period = 0.1  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
-
         image_list = []
 
         image_list.append(cv2.resize(cv2.imread("./Media/Parking2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/GoStraight2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnRight2.png"), (100, 100)))
-        image_list.append(cv2.resize(cv2.imread("./Media/Crosswalk2.png"), (100, 100)))
 
         self.crop_list = []
         self.crop_list2 = []
@@ -82,11 +80,6 @@ class SignRecognitionNode(rclpy.node.Node):
             self.crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
 
         self.image_list = image_list
-
-        '''
-        cv2.imwrite("test", image_list[0])
-        cv2.imwrite("test_crop", crop_list[0])
-        '''
 
     def parameter_callback(self, params):
         succ = True
@@ -129,12 +122,12 @@ class SignRecognitionNode(rclpy.node.Node):
 
         cv2.imshow("M0", mask)
 
-        # blurring mask to remove artifacts
+        # scaling mask to remove artifacts
         scalar = 8
         mask = cv2.resize(mask, (img_width//scalar, img_height//scalar))
         mask = cv2.resize(mask, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
-            # do fine crop
+        # do fine crop
         sensitivity = 140
         threshold = 1800
 
@@ -146,7 +139,6 @@ class SignRecognitionNode(rclpy.node.Node):
         cols_nz = np.nonzero(col_counts)[0] - 1
         cv2.imshow("M1", mask)
 
-
         if np.sum(rows_nz) > 0 and sum(cols_nz) > 0:       # Only do when blue is found
             padding = 5
             mask = mask[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding // 1))]
@@ -154,26 +146,18 @@ class SignRecognitionNode(rclpy.node.Node):
             cv2.imshow("M2", mask)
 
             cv2.imshow("I", precise_crop)
-            #hsv_img = cv2.cvtColor(precise_crop, cv2.COLOR_BGR2HSV)
 
-            # find blue
-            #mask2 = cv2.inRange(img_resize, lower_bound, upper_bound)
-            
             if mask.shape[0] > 0 and mask.shape[1] > 0:
                 precise_crop2 = cv2.resize(precise_crop, (100, 100))
                 #compare to test images
                 scores = []
-                scores2 = []
                 for i in self.image_list:
                 #for i in self.crop_list:
                     #i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
                     scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
                     
-                    #scores.append(structural_similarity(i, edged, gaussian_weighcrop, lower_bound, upper_bound), gaussian_weights=True, multichannel=True))
-
                 scores = np.array(scores)
                 #self.get_logger().info(str(scores))
-
 
                 #find best match
                 i = np.argmax(scores)
@@ -184,14 +168,7 @@ class SignRecognitionNode(rclpy.node.Node):
                     t = (self.SignType(i))
                     self.get_logger().info(str(t) + " " + str(100 * scores[i]) + "%")
                 
-                #cv2.imshow("Edged", edged)
-
-                #cv2.imshow("CROPMASK", crop_mask)
                 cv2.imshow("PRECISECROP2", precise_crop2)
-
-            
-        #cv2.imshow("CROP", crop_img)
-
         cv2.waitKey(1)
 
 def main(args=None):
