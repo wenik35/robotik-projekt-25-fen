@@ -22,10 +22,10 @@ class imageProcessingNode(rclpy.node.Node):
 
         self.declare_parameter('line_expected_at', 550)
         self.declare_parameter('canny_high', 300)
-        self.declare_parameter('canny_low', 150)
-        self.declare_parameter('threshold', 80)
+        self.declare_parameter('canny_low', 200)
+        self.declare_parameter('threshold', 60)
         self.declare_parameter('minLineLength', 20)
-        self.declare_parameter('maxLineGap', 10)
+        self.declare_parameter('maxLineGap', 3)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -48,6 +48,9 @@ class imageProcessingNode(rclpy.node.Node):
         self.parking_line = self.create_publisher(String, 'parking_line', qos_profile=qos_policy)
         self.parking_message = String()
         self.parking_message.data = "First parking bay found"
+
+        self.last_left = []
+        self.last_right = []
 
     # handling received image data
     def scanner_callback(self, data):
@@ -94,15 +97,30 @@ class imageProcessingNode(rclpy.node.Node):
         filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
         # average lines and calculate driving info
-        averaged = average(edged, filtered_lines)
-        steering_factor = calculate_steering(averaged, edged.shape[1])
+        averaged = average(edged, filtered_lines, self.last_left, self.last_right)
+
+        left_line = []
+        if( len(averaged[0]) > 0):
+            left_line = make_points(edged, averaged[0])
+            self.last_left.append(averaged[0])
+            if len(self.last_left) > 10:
+                self.last_left.pop(0)
+
+        right_line = []
+        if( len(averaged[1]) > 0):
+            right_line = make_points(edged, averaged[1])
+            self.last_right.append(averaged[1])
+            if len(self.last_right) > 10:
+                self.last_right.pop(0)
+
+        steering_factor = calculate_steering([left_line, right_line], edged.shape[1])
         if not steering_factor == 0:
             steering_msg = Int16()
             steering_msg.data = int(steering_factor)
             self.steering.publish(steering_msg)
 
         # display lanes
-        display_averaged_lines = display_lines(edged2color, averaged, (0, 255, 0))
+        display_averaged_lines = display_lines(edged2color, [left_line, right_line], (0, 255, 0))
         lanes = cv2.addWeighted(filtered_lines_img, 0.8, display_averaged_lines, 1, 10)
 
         # show combined images
@@ -151,6 +169,8 @@ def get_birds_eye_view(image):
     height, width = warped.shape[:2]
     cut_warped = warped[height//2:height, width//4:width-width//4]
     
+    resized = cv2.resize(cut_warped, [height//2, width//4])
+
     return cut_warped
 
 def filter_parking(lines):
@@ -168,8 +188,9 @@ def filter_parking(lines):
 
 def remove_image_edges(image):
     height, width = image.shape[:2]
-    left_area = np.array([[0, 190], [0, 205], [150, height], [170, height]], np.int32)
+    left_area = np.array([[0, 130], [0, 205], [150, height], [190, height]], np.int32)
     right_area = np.array([[width, 70], [width, 100], [740, height], [755, height]], np.int32)
+    #middle_tri = np.array([[300, height], [width-300, height], [width//2, 100]], np.int32)
     
     mask = cv2.fillPoly(image, [left_area, right_area], 0)
     return mask
@@ -201,7 +222,7 @@ def filter_lines(lines):
             angle = line_angle(line)
 
             # filter out lines that are too flat
-            if angle < 50:
+            if angle < 45:
                 continue
 
             slope = (y2-y1) / (x2-x1)
@@ -232,11 +253,10 @@ def filter_lines(lines):
                     
                     distance = np.linalg.norm([x - middle[0], y - middle[1]])
 
-                    # this is shit
                     angle_diff = abs(data[2] - data2[2])
 
                     # check if intersection is in correct distance and lines are similarly angled
-                    if 15 < distance < 30 and angle_diff < 20:
+                    if 22 < distance < 28 and angle_diff < 5:
                         result.append(line)
     
     result = np.unique(np.array(result), axis=0)
@@ -330,8 +350,10 @@ def calculate_steering(lines, image_width):
         angle = 90 - (left_angle + right_angle) / 2
 
         offset = image_width / 2 - (x1_left + x1_right) / 2
+    
+    steering = (angle + offset) / 4
 
-    return (angle + offset) / 4
+    return steering * 2
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line 
@@ -373,7 +395,7 @@ def detect_boundary(image, lines):
     bound_lines = make_points(image, polys)
     return np.array(bound_lines)
     
-def average(image, lines):
+def average(image, lines, last_left: list, last_right: list):
     left = []
     right = []
     height, width = image.shape[:2]
@@ -384,24 +406,28 @@ def average(image, lines):
                 parameters = np.polyfit((x1, x2), (y1, y2), 1)
                 slope = parameters[0]
                 y_int = parameters[1]
+                middle = get_middle_point(line)
 
-                if x1 < width//2:
+                if middle[0] < width//2:
                     left.append((slope, y_int))
-
-                if x1 > width//2:
+                else:
                     right.append((slope, y_int))
 
-    left_line = []
+    left_avg = []
     if len(left) > 0:
         left_avg = np.average(left, axis=0)
-        left_line = make_points(image, left_avg)    
-    
-    right_line = []
+        if len(last_left) > 0:
+            last_avg = np.average(last_left, axis=0)
+            left_avg = np.average([left_avg, last_avg], axis=0)
+   
+    right_avg = []
     if len(right) > 0:
         right_avg = np.average(right, axis=0)
-        right_line = make_points(image, right_avg)
+        if len(last_right) > 0:
+            last_avg = np.average(last_right, axis=0)
+            right_avg = np.average([right_avg, last_avg], axis=0)
 
-    return [left_line, right_line]
+    return [left_avg, right_avg]
 
 def make_points(image, line):
     slope, y_int = line
