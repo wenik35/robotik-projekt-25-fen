@@ -19,7 +19,6 @@ class SignRecognitionNode(rclpy.node.Node):
         GO_STRAIGHT = 1
         TURN_LEFT = 2
         TURN_RIGHT = 3
-        CROSSWALK = 4
 
 
     def __init__(self):
