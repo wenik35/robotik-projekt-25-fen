@@ -33,7 +33,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.params = {
             'lower_bound' : [88,120,30],
             'upper_bound' : [105,255,200],
-            'scalar' : 30
+            'scalar' : 8
         }
 
         res = [640, 480]
@@ -142,7 +142,6 @@ class SignRecognitionNode(rclpy.node.Node):
         cv2.imshow("M0", mask)
 
         # scaling mask to remove artifacts
-        scalar = 8
         maskR = cv2.resize(mask, (img_width//scalar, img_height//scalar))
         maskR = cv2.resize(maskR, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
