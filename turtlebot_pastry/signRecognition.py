@@ -119,18 +119,19 @@ class SignRecognitionNode(rclpy.node.Node):
     
     def timer_callback(self):
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
-        cv2.imshow("N", self.img_cv)
+        #cv2.imshow("N", self.img_cv)
+        
         self.img_cv = cv2.remap(self.img_cv,
                                 self.map1,
                                 self.map2,
                                 interpolation = cv2.INTER_LINEAR,
                                 borderMode = cv2.BORDER_CONSTANT)
-        cv2.imshow("K", self.img_cv)
+        img_v = self.img_cv.copy()
+        cv2.rectangle(img_v, (400, 240), (640, 100), (0, 240, 0), 2)
         
         # cropping image
         crop_img = self.img_cv[:, 400:] # TODO: Optimize cropping
         crop_img = crop_img[100:240]
-        cv2.imshow("IMG", crop_img)
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
@@ -191,12 +192,15 @@ class SignRecognitionNode(rclpy.node.Node):
 
             precise_crop = crop_img[new_top:new_bottom, new_left:new_right]
 
+            cv2.rectangle(img_v, (400 + new_left, 100 + new_bottom), (400 + new_right, 100 + new_top), (0, 0, 240), 2)
+
+
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
             #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
 
             cv2.imshow("M2", maskR)
 
-            cv2.imshow("I", precise_crop)
+            #cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
 
             if maskR.shape[0] > 0 and maskR.shape[1] > 0:
@@ -221,6 +225,7 @@ class SignRecognitionNode(rclpy.node.Node):
                     self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
                 cv2.imshow("PRECISECROP2", precise_crop2)
+        cv2.imshow("V", img_v)
         cv2.waitKey(1)
 
 def main(args=None):
