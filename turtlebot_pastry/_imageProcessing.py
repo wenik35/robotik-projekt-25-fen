@@ -2,6 +2,7 @@
 simple line following node
 """
 
+import collections
 import rclpy
 import rclpy.node
 import cv2
@@ -10,7 +11,7 @@ import math
 import time
 from random import randrange
 
-from std_msgs.msg import Int16, String
+from std_msgs.msg import Int16, Float32, String
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
@@ -43,14 +44,14 @@ class imageProcessingNode(rclpy.node.Node):
             qos_profile=qos_policy)
         self.subscription  # prevent unused variable warning
 
-        self.steering = self.create_publisher(Int16, 'line_offset', qos_profile=qos_policy)
+        self.steering = self.create_publisher(Float32, 'steering_factor', qos_profile=qos_policy)
         self.boundary_detected = self.create_publisher(String, 'boundary_detected', qos_profile=qos_policy)
         self.parking_line = self.create_publisher(String, 'parking_line', qos_profile=qos_policy)
         self.parking_message = String()
         self.parking_message.data = "First parking bay found"
 
-        self.last_left = []
-        self.last_right = []
+        self.last_left = collections.deque(maxlen=10)
+        self.last_right = collections.deque(maxlen=10)
 
     # handling received image data
     def scanner_callback(self, data):
@@ -94,34 +95,22 @@ class imageProcessingNode(rclpy.node.Node):
         # filter out line the do not belong to lanes
         filtered_lines = filter_lines(lines)
         display_filtered_lines = display_lines(edged2color, filtered_lines, (255, 0, 0))
-        filtered_lines_img = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
+        lanes = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
         # average lines and calculate driving info
-        averaged = average(edged, filtered_lines, self.last_left, self.last_right)
+        left, right, middle = average(self, edged, filtered_lines)
 
-        left_line = []
-        if( len(averaged[0]) > 0):
-            left_line = make_points(edged, averaged[0])
-            self.last_left.append(averaged[0])
-            if len(self.last_left) > 10:
-                self.last_left.pop(0)
-
-        right_line = []
-        if( len(averaged[1]) > 0):
-            right_line = make_points(edged, averaged[1])
-            self.last_right.append(averaged[1])
-            if len(self.last_right) > 10:
-                self.last_right.pop(0)
-
-        steering_factor = calculate_steering([left_line, right_line], edged.shape[1])
-        if not steering_factor == 0:
-            steering_msg = Int16()
-            steering_msg.data = int(steering_factor)
+        if len(middle) > 0:
+            steering_factor = calculate_steering(middle, edged.shape[1])
+            steering_msg = Float32(data=steering_factor)
             self.steering.publish(steering_msg)
 
         # display lanes
-        display_averaged_lines = display_lines(edged2color, [left_line, right_line], (0, 255, 0))
-        lanes = cv2.addWeighted(filtered_lines_img, 0.8, display_averaged_lines, 1, 10)
+        display_averaged_lines = display_lines(edged2color, [left, right], (0, 255, 0))
+        lanes = cv2.addWeighted(lanes, 0.8, display_averaged_lines, 1, 10)
+
+        display_middle_line = display_lines(edged2color, [middle], (0, 0, 255))
+        lanes = cv2.addWeighted(lanes, 0.8, display_middle_line, 1, 10)
 
         # show combined images
         lane_imgs = np.concatenate((birds_eye_view, lines_img, lanes), axis=0)
@@ -150,12 +139,26 @@ class imageProcessingNode(rclpy.node.Node):
         cv2.waitKey(1)
 
 def get_birds_eye_view(image):
+    """
+    res = [640, 240]
+    v= 350.0
+    K = np.array([[v, 0.0, res[0] / 2],
+                  [0.0, v, res[1] / 2],
+                  [0.0, 0.0, 1.0]], dtype=np.float32)
+    D = np.array([-0.3, 0.1, 0.0, 0.0], dtype=np.float32)  # Distortion coefficients
+    new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, (res[0], res[1]), np.eye(3), balance=1)
+    map1, map2 = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), new_K, (res[0], res[1]), cv2.CV_16SC2)
+
+    undistorted = cv2.remap(image, map1, map2, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+    """
+    #TODO: optimise, takes more than half of the runtime
     padding = np.zeros_like(image)
     blank = np.concatenate((padding, padding, padding), axis=1)
     with_image = np.concatenate((padding, image, padding), axis=1)
     padded = np.concatenate((blank, with_image, blank), axis=0)
 
     height, width = padded.shape[:2]
+
     third = width // 3
     offset_bottom = 110
     offset_top = 40
@@ -168,8 +171,6 @@ def get_birds_eye_view(image):
 
     height, width = warped.shape[:2]
     cut_warped = warped[height//2:height, width//4:width-width//4]
-    
-    resized = cv2.resize(cut_warped, [height//2, width//4])
 
     return cut_warped
 
@@ -314,46 +315,16 @@ def filter_lines_legacy(grayscale, lines):
 
     return [left, right]
 
-def calculate_steering(lines, image_width):
+def calculate_steering(middle_line, image_width):
     # Left x: 263 Right x: 710
     # Image width: 960 Half width: 480 Calculated middle: 486
     # links positiv, rechts negativ
-    left = lines[0]    
-    right = lines[1]
 
-    angle = 0
-    offset = 0
-
-    if len(left) == len(right) == 0:
-        return 0
-    elif len(left) == 0:
-        angle = 90 - line_angle(right)
-        offset = image_width / 2 - right[0] + 220
-    elif len(right) == 0:
-        angle = 90 - line_angle(left)
-        offset = image_width / 2 - left[0] - 220
-    else :
-        x1_left, y1, x2, y2 = left
-        slope_left, y_int_left = np.polyfit((x1_left, x2), (y1, y2), 1)
-
-        x1_right, y1, x2, y2 = right 
-        slope_right, y_int_right = np.polyfit((x1_right, x2), (y1, y2), 1)
-
-        left_angle = line_angle(left)
-        if (slope_left > 0):
-            left_angle = 180 - left_angle
-
-        right_angle = line_angle(right)
-        if (slope_right > 0):
-            right_angle = 180 - right_angle
-
-        angle = 90 - (left_angle + right_angle) / 2
-
-        offset = image_width / 2 - (x1_left + x1_right) / 2
+    angle = line_angle(middle_line) - 90
     
-    steering = (angle + offset) / 4
+    offset = image_width // 2 - get_middle_point(middle_line)[0]
 
-    return steering * 2
+    return (angle + offset) / 20
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line 
@@ -377,7 +348,7 @@ def display_lines(image, lines, color=None):
                 if random_color:
                     color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
                 x1, y1, x2, y2 = line 
-                cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
+                cv2.line(lines_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
 
     return lines_image
 
@@ -395,7 +366,8 @@ def detect_boundary(image, lines):
     bound_lines = make_points(image, polys)
     return np.array(bound_lines)
     
-def average(image, lines, last_left: list, last_right: list):
+def average(self, image, lines):
+    #TODO: optimise, polyfit takes long
     left = []
     right = []
     height, width = image.shape[:2]
@@ -413,21 +385,45 @@ def average(image, lines, last_left: list, last_right: list):
                 else:
                     right.append((slope, y_int))
 
-    left_avg = []
+
+    left_line = []
     if len(left) > 0:
         left_avg = np.average(left, axis=0)
-        if len(last_left) > 0:
-            last_avg = np.average(last_left, axis=0)
+
+        if len(self.last_left) > 0:
+            last_avg = np.average(self.last_left, axis=0)
             left_avg = np.average([left_avg, last_avg], axis=0)
+        
+        left_line = make_points(image, left_avg)
+        self.last_left.append(left_avg)
    
-    right_avg = []
+
+    right_line = []
     if len(right) > 0:
         right_avg = np.average(right, axis=0)
-        if len(last_right) > 0:
-            last_avg = np.average(last_right, axis=0)
-            right_avg = np.average([right_avg, last_avg], axis=0)
 
-    return [left_avg, right_avg]
+        if len(self.last_right) > 0:
+            last_avg = np.average(self.last_right, axis=0)
+            right_avg = np.average([right_avg, last_avg], axis=0)
+        
+        right_line = make_points(image, right_avg)
+        self.last_right.append(right_avg)
+    
+    middle_line = []
+    if len(left_line) == len(right_line) == 0:
+        pass
+    elif len(left_line) == 0:
+        middle_line = right_line.copy()
+        middle_line[0] -= 220
+        middle_line[2] -= 220
+    elif len(right_line) == 0:
+        middle_line = left_line.copy()
+        middle_line[0] += 220
+        middle_line[2] += 220
+    else :
+        middle_line = np.average([right_line, left_line], axis=0)
+
+    return left_line, right_line, middle_line
 
 def make_points(image, line):
     slope, y_int = line
