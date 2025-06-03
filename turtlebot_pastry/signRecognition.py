@@ -33,7 +33,12 @@ class SignRecognitionNode(rclpy.node.Node):
         self.params = {
             'lower_bound' : [88,120,30],
             'upper_bound' : [105,255,200],
-            'scalar' : 8
+            'scalar' : 8,
+            'padding' : 8,
+            'crop_L' : 400,
+            'crop_R' : 640,
+            'crop_B' : 240,
+            'crop_T' : 100
         }
 
         res = [640, 480]
@@ -119,6 +124,11 @@ class SignRecognitionNode(rclpy.node.Node):
     
     def timer_callback(self):
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
+        padding = self.get_parameter('padding').get_parameter_value().integer_value
+        crop_L = self.get_parameter('crop_L').get_parameter_value().integer_value
+        crop_R = self.get_parameter('crop_R').get_parameter_value().integer_value
+        crop_B = self.get_parameter('crop_B').get_parameter_value().integer_value
+        crop_T = self.get_parameter('crop_T').get_parameter_value().integer_value
         #cv2.imshow("N", self.img_cv)
         
         self.img_cv = cv2.remap(self.img_cv,
@@ -127,11 +137,11 @@ class SignRecognitionNode(rclpy.node.Node):
                                 interpolation = cv2.INTER_LINEAR,
                                 borderMode = cv2.BORDER_CONSTANT)
         img_v = self.img_cv.copy()
-        cv2.rectangle(img_v, (400, 240), (640, 100), (0, 240, 0), 2)
+        cv2.rectangle(img_v, (crop_L, crop_B), (crop_R, crop_T), (0, 240, 0), 2)
         
         # cropping image
-        crop_img = self.img_cv[:, 400:] # TODO: Optimize cropping
-        crop_img = crop_img[100:240]
+        crop_img = self.img_cv[:, crop_L:crop_R] # TODO: Optimize cropping
+        crop_img = crop_img[crop_T:crop_B]
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
@@ -158,7 +168,6 @@ class SignRecognitionNode(rclpy.node.Node):
         cv2.imshow("M1", maskR)
 
         if np.sum(rows_nz) > 0 and sum(cols_nz) > 0:       # Only do when blue is found
-            padding = 8
             maskR = maskR[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
 
             top = max(0, rows_nz[0] - padding)
@@ -191,7 +200,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
             precise_crop = crop_img[new_top:new_bottom, new_left:new_right]
 
-            cv2.rectangle(img_v, (400 + new_left, 100 + new_bottom), (400 + new_right, 100 + new_top), (0, 0, 240), 2)
+            cv2.rectangle(img_v, (crop_L + new_left, crop_T + new_bottom), (crop_L + new_right, crop_T + new_top), (0, 0, 240), 2)
 
 
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
