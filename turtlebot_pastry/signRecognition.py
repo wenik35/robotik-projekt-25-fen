@@ -31,11 +31,11 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [88,120,30],
-            'upper_bound' : [105,255,200],
+            'lower_bound' : [92,180,10],
+            'upper_bound' : [105,255,100],
             'scalar' : 8,
-            'padding' : 8,
-            'crop_L' : 400,
+            'padding' : 10,
+            'crop_L' : 444,
             'crop_R' : 640,
             'crop_B' : 240,
             'crop_T' : 100
@@ -74,7 +74,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
 
         # create timer to periodically invoke the driving logic
-        timer_period = 0.1  # seconds
+        timer_period = 0.05  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
@@ -95,6 +95,7 @@ class SignRecognitionNode(rclpy.node.Node):
             self.crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
 
         self.image_list = image_list
+        self.sign_List = []
 
     def parameter_callback(self, params):
         succ = True
@@ -110,7 +111,7 @@ class SignRecognitionNode(rclpy.node.Node):
     def scanner_callback(self, data):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
-        cv2.imshow("IMG", self.img_cv)
+        #cv2.imshow("IMG", self.img_cv)
 
     def to_binary(self, img):
         lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
@@ -119,8 +120,25 @@ class SignRecognitionNode(rclpy.node.Node):
         upper_bound = np.array(upper_bound, dtype = "uint8")
 
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
         return cv2.inRange(hsv_img, lower_bound, upper_bound)
+    
+    def whiteBalance(self, img):
+        img = img.astype(np.float32)
+        avg_b = np.mean(img[:, :, 0])
+        avg_g = np.mean(img[:, :, 1])
+        avg_r = np.mean(img[:, :, 2])
+        avg_grey = (avg_g + avg_b + avg_r) / 3
+
+        scale_b = avg_grey / avg_b
+        scale_g = avg_grey / avg_g
+        scale_r = avg_grey / avg_r
+
+        img[:, :, 0] *= scale_b
+        img[:, :, 1] *= scale_g
+        img[:, :, 2] *= scale_r
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        return img
+
     
     def timer_callback(self):
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
@@ -130,6 +148,8 @@ class SignRecognitionNode(rclpy.node.Node):
         crop_B = self.get_parameter('crop_B').get_parameter_value().integer_value
         crop_T = self.get_parameter('crop_T').get_parameter_value().integer_value
         #cv2.imshow("N", self.img_cv)
+
+        self.img_cv = self.whiteBalance(self.img_cv)
         
         self.img_cv = cv2.remap(self.img_cv,
                                 self.map1,
@@ -157,11 +177,13 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # do fine crop
         sensitivity = 140
-        threshold = 1800
+        threshold = 3000
 
         bright_mask =  cv2.inRange(maskR, sensitivity, 255)
         row_counts = np.sum(bright_mask, axis=1) // threshold
         col_counts = np.sum(bright_mask, axis=0) // threshold
+
+        #print(col_counts)
 
         rows_nz = np.nonzero(row_counts)[0] - 1
         cols_nz = np.nonzero(col_counts)[0] - 1
@@ -202,7 +224,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
             cv2.rectangle(img_v, (crop_L + new_left, crop_T + new_bottom), (crop_L + new_right, crop_T + new_top), (0, 0, 240), 2)
 
-
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
             #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
 
@@ -211,7 +232,7 @@ class SignRecognitionNode(rclpy.node.Node):
             #cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
 
-            if maskR.shape[0] > 0 and maskR.shape[1] > 0:
+            if maskR.shape[0] > 1 and maskR.shape[1] > 1:
                 precise_crop2 = cv2.resize(precise_crop, (100, 100))
                 #compare to test images
                 scores = []
@@ -225,12 +246,14 @@ class SignRecognitionNode(rclpy.node.Node):
                 scores = np.array(scores)
                 #find best match
                 i = np.argmax(scores)
-                if scores[i] > 0.42:
+                t = (self.SignType(i))
+                if scores[i] > 0.44:
                     msg = Int64()
                     msg.data = int(i)
                     self.publisher_.publish(msg)
-                    t = (self.SignType(i))
                     self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+                else:
+                    print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
                 cv2.imshow("PRECISECROP2", precise_crop2)
         cv2.imshow("V", img_v)
@@ -238,7 +261,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, SignRecognitionNode)
-
 
 if __name__ == '__main__':
     main()
