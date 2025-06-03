@@ -218,7 +218,7 @@ class SignRecognitionNode(rclpy.node.Node):
                     msg.data = int(i)
                     self.publisher_.publish(msg)
                     t = (self.SignType(i))
-                    self.get_logger().info("OLD: " + str(t) + " " + str(100 * scores[i])[:5] + "%")
+                    self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
                 cv2.imshow("PRECISECROP2", precise_crop2)
         cv2.waitKey(1)
