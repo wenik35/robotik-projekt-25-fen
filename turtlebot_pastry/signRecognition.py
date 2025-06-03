@@ -20,7 +20,6 @@ class SignRecognitionNode(rclpy.node.Node):
         TURN_LEFT = 2
         TURN_RIGHT = 3
 
-
     def __init__(self):
         super().__init__('SignRecognitionNode')
 
@@ -108,7 +107,7 @@ class SignRecognitionNode(rclpy.node.Node):
         cv2.imshow("N", self.img_cv)
 
         # cropping image
-        crop_img = self.img_cv[:, 480:] # TODO: Optimize cropping
+        crop_img = self.img_cv[:, 400:] # TODO: Optimize cropping
         crop_img = crop_img[140:225]
         cv2.imshow("IMG", crop_img)
 
@@ -160,7 +159,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
                 #find best match
                 i = np.argmax(scores)
-                if scores[i] > 0.3:
+                if scores[i] > 0.42:
                     msg = Int64()
                     msg.data = int(i)
                     self.publisher_.publish(msg)
