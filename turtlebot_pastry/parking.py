@@ -11,7 +11,6 @@ from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
-from venv import create
 
 class parkingNode(rclpy.node.Node):
 
@@ -20,6 +19,12 @@ class parkingNode(rclpy.node.Node):
 
         self.declare_parameter('detection_distance', 0.30)
         self.declare_parameter('deadreconing_time', 3.0)
+
+        self.declare_parameter('canny_high', 400)
+        self.declare_parameter('canny_low', 150)
+        self.declare_parameter('threshold', 60)
+        self.declare_parameter('minLineLength', 20)
+        self.declare_parameter('maxLineGap', 10)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -50,10 +55,10 @@ class parkingNode(rclpy.node.Node):
             self.follow_line_callback,
             qos_profile=qos_policy)
 
-        self.line_call_sub = self.create_subscription(
-            Twist,
-            'parking_line',
-            self.line_callback,
+        self.image_sub = self.create_subscription(
+            CompressedImage,
+            '/image_raw/compressed',
+            self.cam_callback,
             qos_profile=qos_policy)
 
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
@@ -69,28 +74,6 @@ class parkingNode(rclpy.node.Node):
             self.status = "Active"
             self.lineNo = 0
 
-    def line_callback(self, data):
-        if self.status == "Active":
-            self.status = "Searching"
-            timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
-            #self.line_timer.cancel()
-            self.line_timer = self.create_timer(timer_period, self.timer_callback)
-            self.lineNo += 1
-            '''
-            if self.lineNo != 0:
-                self.status = "Scanning"
-                timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
-                self.line_timer.cancel()
-                self.line_timer = self.create_timer(timer_period, self.timer_callback)
-                #last_call = self.lineNo
-                self.lineNo += 1
-                sleep(timer_period - 0.1)
-                self.last_call = last_call
-
-            if self.lineNo == 4:
-                self.lineNo = 0
-                self.status = "Paused"
-            '''
     def scanner_callback(self, data):
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
@@ -163,6 +146,87 @@ class parkingNode(rclpy.node.Node):
         twist.linear.x = 0.0
         twist.angular.z = 0.0
         self.command_publisher.publish(twist)
+    
+    def cam_callback(self, data):
+        canny_high = self.get_parameter('canny_high').get_parameter_value().integer_value
+        canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
+
+        threshold = self.get_parameter('threshold').get_parameter_value().integer_value
+        minLineLength = self.get_parameter('minLineLength').get_parameter_value().integer_value
+        maxLineGap = self.get_parameter('maxLineGap').get_parameter_value().integer_value
+
+        # convert message to opencv image
+        img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
+
+        # cut upper (uninteresting) half out
+        height, width = img_cv.shape[:2]
+        cut_img = img_cv[height-height//3:height, 0:width]
+        height, width = cut_img.shape[:2]
+        cut_img = cut_img[height-height//4:height, width-width//8:width]
+
+        # use cv2 edge detection
+        edged = cv2.Canny(cut_img, canny_low, canny_high)
+
+        # detect parking bay
+        parking_lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        parking_bay_roi_color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
+
+        display_parking_lines = display_lines(parking_bay_roi_color, parking_lines)
+        parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_parking_lines, 1, 10)
+
+        filtered_parking_lines = filter_parking(parking_lines)
+        display_filtered_parking_lines = display_lines(parking_bay_roi_color, filtered_parking_lines)
+        filtered_parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_filtered_parking_lines, 1, 10)
+
+        combined_parking = np.concatenate((parking_lines_img, filtered_parking_lines_img), axis=0)
+        cv2.imshow("parking", combined_parking)
+        if len(filtered_parking_lines) > 0:
+            if self.status == "Active":
+                self.status = "Searching"
+                timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
+                #self.line_timer.cancel()
+                self.line_timer = self.create_timer(timer_period, self.timer_callback)
+                self.lineNo += 1
+
+        cv2.waitKey(1)
+
+def filter_parking(lines):
+    result = []
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line
+            if (not x1 == x2) and (not y1 == y2):
+                slope, y_int = np.polyfit((x1, x2), (y1, y2), 1)
+                if -1 < slope < 0:
+                    result.append(line)
+
+    return np.array(result)
+
+def unpack_lines(lines):
+    unpacked = []
+
+    if lines is not None:
+        for line in lines:
+            unpacked.append(line[0])
+    return unpacked
+
+def display_lines(image, lines, color=None):
+    lines_image = np.zeros_like(image)
+    random_color = (color == None)
+    if lines is not None:
+        for line in lines:
+            try:
+                if (len(line) > 0):
+                    if random_color:
+                        color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
+                    x1, y1, x2, y2 = line 
+                    cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
+            except Exception as e:
+                print("Error in display_lines: ", e)
+                print(line)
+                continue
+
+    return lines_image
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, parkingNode)

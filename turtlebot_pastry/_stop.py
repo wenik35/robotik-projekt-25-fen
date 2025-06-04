@@ -17,7 +17,9 @@ class stopDrivingNode(Node):
         msg = Twist()
         msg.linear.x = 0.0
         msg.angular.z = 0.0
-        self.publisher_.publish(msg)
+
+        for i in range(10):
+            self.publisher_.publish(msg)
 
         print()
         print("sent stop command")
