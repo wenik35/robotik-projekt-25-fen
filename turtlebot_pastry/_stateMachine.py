@@ -82,10 +82,24 @@ class stateMachineNode(Node):
         # publisher for driving commands
         self.cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
 
+        self.overright_publisher = self.create_publisher(Bool, 'overright', qos_policy)
+
+    def activate_overright(self):
+        self.driving_overwrite = True
+        msg = Bool()
+        msg.data = True
+        self.overright_publisher.publish(msg)
+
+    def deactivate_overright(self):
+        self.driving_overwrite = False
+        msg = Bool()
+        msg.data = False
+        self.overright_publisher.publish(msg)
+
     def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
-        if((not self.changingLane) and (not self.parking) and self.greenLight and (not forbid_driving)):
+        if not self.driving_overwrite and self.greenLight and (not forbid_driving):
             self.cmd_vel.publish(msg)
 
     def trafficlight_callback(self, msg):
