@@ -57,7 +57,20 @@ class stateMachineNode(Node):
             self.parking_callback,
             qos_profile=qos_policy)
 
+        self.crossingNoticeSub = self.create_subscription(
+            Bool,
+            'crossing_in_process',
+            self.crossing_notice_callback,
+            qos_profile=qos_policy)
+
+        self.crossingCommandSub = self.create_subscription(
+            Twist,
+            'crossing_cmd',
+            self.crossing_callback,
+            qos_profile=qos_policy)
+
         # status variables
+        self.driving_overwrite = False
         self.changingLane = False
         self.parking = False
         self.greenLight = True

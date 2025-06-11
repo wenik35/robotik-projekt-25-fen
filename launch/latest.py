@@ -41,4 +41,11 @@ def generate_launch_description():
             output='screen',
             arguments=['--ros-args', '--log-level', 'INFO']
         ),
+        Node(
+            package='turtlebot_pastry',
+            executable='crossing',
+            name='crossing',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
     ])
