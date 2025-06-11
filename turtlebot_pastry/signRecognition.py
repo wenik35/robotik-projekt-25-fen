@@ -2,6 +2,7 @@ import rclpy
 import rclpy.node
 import cv2
 import numpy as np
+import time
 
 from enum import Enum
 from std_msgs.msg import Int64
@@ -31,26 +32,41 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [92,180,10],
-            'upper_bound' : [105,255,100],
+            'lower_bound' : [100,170,120],
+            'upper_bound' : [110,245,255],
             'scalar' : 8,
-            'padding' : 10,
+            'padding' : 8,
             'crop_L' : 444,
             'crop_R' : 640,
             'crop_B' : 240,
             'crop_T' : 100
         }
 
-        res = [640, 480]
+        width = 640
+        height = 480
+        new_width = 1280
+        new_height = 960
+        
         v = 480.0
 
-        K = np.array([[v, 0.0, res[0] / 2],
-                      [0.0, v, res[1] / 2],
+        K = np.array([[v, 0.0, width / 2],
+                      [0.0, v, height / 2],
                       [0.0, 0.0, 1.0]])
         D = np.array([[-0.3], [0.1], [0.0], [0.0]])
 
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, (res[0], res[1]), np.eye(3), balance = 1)
-        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), new_K, (res[0], res[1]), cv2.CV_16SC2)
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, 
+                                                                       D, 
+                                                                       (width, height),
+                                                                       np.eye(3),
+                                                                       balance = 1,
+                                                                       new_size = (new_width, new_height),
+                                                                       fov_scale = 1.4)
+        
+        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, 
+                                                                   D, 
+                                                                   np.eye(3), 
+                                                                   new_K, ((new_width, new_height)),
+                                                                   cv2.CV_16SC2)
 
         for param_name, default_value in self.params.items():
             self.declare_parameter(param_name, default_value)
@@ -84,16 +100,6 @@ class SignRecognitionNode(rclpy.node.Node):
         image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnRight2.png"), (100, 100)))
 
-        self.templates = [self.to_binary(img) for img in image_list]
-
-        self.crop_list = []
-        self.crop_list2 = []
-        lower_bound = np.array([140,55,0], dtype = "uint8")
-        upper_bound = np.array([155,97,0], dtype = "uint8")
-
-        for i in image_list:
-            self.crop_list.append(cv2.inRange(i, lower_bound, upper_bound))
-
         self.image_list = image_list
         self.sign_List = []
 
@@ -123,45 +129,76 @@ class SignRecognitionNode(rclpy.node.Node):
         return cv2.inRange(hsv_img, lower_bound, upper_bound)
     
     def whiteBalance(self, img):
+        exp_grey = 120
+        b, g, r = cv2.split(img)
+        b = cv2.add(b, 10)
+        g = cv2.subtract(g, 4)
+        r = cv2.add(r, 8)
+        img = cv2.merge([b, g, r])
         img = img.astype(np.float32)
         avg_b = np.mean(img[:, :, 0])
         avg_g = np.mean(img[:, :, 1])
         avg_r = np.mean(img[:, :, 2])
-        avg_grey = (avg_g + avg_b + avg_r) / 3
 
-        scale_b = avg_grey / avg_b
-        scale_g = avg_grey / avg_g
-        scale_r = avg_grey / avg_r
+        avg_grey = (avg_g + avg_b + avg_r) / 3
+        avg_grey *= exp_grey / avg_grey 
+
+        scale_b = (avg_grey / avg_b) * 1.08
+        scale_g = (avg_grey / avg_g) * 0.97
+        scale_r = (avg_grey / avg_r)
 
         img[:, :, 0] *= scale_b
         img[:, :, 1] *= scale_g
         img[:, :, 2] *= scale_r
         img = np.clip(img, 0, 255).astype(np.uint8)
         return img
+    
+    def adjustSign(self, img):
+        img = img.astype(np.float32)
+        current_brightness = img.mean()
+        brightness_scale = 120 / current_brightness
+        img *= brightness_scale
+        b, g, r = cv2.split(img)
+        current_means = np.array([r.mean(), g.mean(), b.mean()])
+        target_means = np.array((0.87, 0.94, 1.2)) * img.mean()
+        scale_factors = target_means / current_means
 
+        r *= scale_factors[0]
+        g *= scale_factors[1]
+        b *= scale_factors[2]
+
+        adjusted = cv2.merge([b, g, r])
+        adjusted = np.clip(adjusted, 0, 255).astype(np.uint8)
+
+        return adjusted
     
     def timer_callback(self):
+        temp = self.img_cv
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
         padding = self.get_parameter('padding').get_parameter_value().integer_value
         crop_L = self.get_parameter('crop_L').get_parameter_value().integer_value
         crop_R = self.get_parameter('crop_R').get_parameter_value().integer_value
         crop_B = self.get_parameter('crop_B').get_parameter_value().integer_value
         crop_T = self.get_parameter('crop_T').get_parameter_value().integer_value
-        #cv2.imshow("N", self.img_cv)
+        cv2.imshow("N", self.img_cv)
 
-        self.img_cv = self.whiteBalance(self.img_cv)
+        temp = self.whiteBalance(temp)
+        temp = cv2.remap(temp,
+                         self.map1,
+                         self.map2,
+                         interpolation = cv2.INTER_LINEAR,
+                         borderMode = cv2.BORDER_CONSTANT)
+        #cv2.imshow("Noo", temp)
+
         
-        self.img_cv = cv2.remap(self.img_cv,
-                                self.map1,
-                                self.map2,
-                                interpolation = cv2.INTER_LINEAR,
-                                borderMode = cv2.BORDER_CONSTANT)
-        img_v = self.img_cv.copy()
+        img_v = temp.copy()
         cv2.rectangle(img_v, (crop_L, crop_B), (crop_R, crop_T), (0, 240, 0), 2)
         
         # cropping image
-        crop_img = self.img_cv[:, crop_L:crop_R] # TODO: Optimize cropping
+        crop_img = temp[:, crop_L:crop_R] # TODO: Optimize cropping
         crop_img = crop_img[crop_T:crop_B]
+        #crop_img = self.whiteBalance(crop_img)
+        cv2.imshow("C", crop_img)
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
@@ -221,8 +258,12 @@ class SignRecognitionNode(rclpy.node.Node):
                     new_left = max(0, new_right - square_size)
 
             precise_crop = crop_img[new_top:new_bottom, new_left:new_right]
+            max_b = np.max(precise_crop)
+            precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8)
+            #precise_crop = self.adjustSign(precise_crop)
 
-            cv2.rectangle(img_v, (crop_L + new_left, crop_T + new_bottom), (crop_L + new_right, crop_T + new_top), (0, 0, 240), 2)
+            #cv2.rectangle(img_v, (crop_L + new_left, crop_T + new_bottom), (crop_L + new_right, crop_T + new_top), (0, 0, 240), 2)
+            #cv2.rectangle(crop_img, (new_left, new_bottom), (new_right, new_top), (0, 0, 240), 2)
 
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
             #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
@@ -234,6 +275,8 @@ class SignRecognitionNode(rclpy.node.Node):
 
             if maskR.shape[0] > 1 and maskR.shape[1] > 1:
                 precise_crop2 = cv2.resize(precise_crop, (100, 100))
+                pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
+                cv2.imshow("GGG", pcg)
                 #compare to test images
                 scores = []
                 for i in self.image_list:
@@ -255,7 +298,7 @@ class SignRecognitionNode(rclpy.node.Node):
                 else:
                     print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
-                cv2.imshow("PRECISECROP2", precise_crop2)
+                cv2.imshow("T", precise_crop2)
         cv2.imshow("V", img_v)
         cv2.waitKey(1)
 
