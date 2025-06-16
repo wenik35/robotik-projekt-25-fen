@@ -296,7 +296,7 @@ class SignRecognitionNode(rclpy.node.Node):
         t = (self.SignType(i))
 
         if(i == -1):
-            signInfo = (t.name)
+            signInfo = str(t.name)
         else:
             signInfo = str(t.name) + " " + str(100 * scores[i])[:5] + "%"
 
@@ -305,10 +305,11 @@ class SignRecognitionNode(rclpy.node.Node):
             msg = Int64()
             msg.data = int(i)
             self.publisher_.publish(msg)
-
             self.get_logger().info(signInfo)
 
-        cv2.putText(img_v,signInfo, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 240), 2) 
+        cv2.putText(img_v,str(self.SignType(self.lastSign).name), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 240, 0), 2)
+
+        cv2.putText(img_v,signInfo, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 240), 2)
 
         cv2.imshow("V", img_v)
         cv2.waitKey(1)
