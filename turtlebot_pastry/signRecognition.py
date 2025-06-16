@@ -32,14 +32,14 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [100,170,120],
-            'upper_bound' : [110,245,255],
+            'lower_bound' : [100,170,60],
+            'upper_bound' : [110,230,120],
             'scalar' : 8,
             'padding' : 8,
-            'crop_L' : 444,
-            'crop_R' : 640,
-            'crop_B' : 240,
-            'crop_T' : 100
+            'crop_L' : 790,
+            'crop_R' : 1090,
+            'crop_B' : 480,
+            'crop_T' : 240
         }
 
         width = 640
@@ -152,26 +152,7 @@ class SignRecognitionNode(rclpy.node.Node):
         img[:, :, 2] *= scale_r
         img = np.clip(img, 0, 255).astype(np.uint8)
         return img
-    
-    def adjustSign(self, img):
-        img = img.astype(np.float32)
-        current_brightness = img.mean()
-        brightness_scale = 120 / current_brightness
-        img *= brightness_scale
-        b, g, r = cv2.split(img)
-        current_means = np.array([r.mean(), g.mean(), b.mean()])
-        target_means = np.array((0.87, 0.94, 1.2)) * img.mean()
-        scale_factors = target_means / current_means
 
-        r *= scale_factors[0]
-        g *= scale_factors[1]
-        b *= scale_factors[2]
-
-        adjusted = cv2.merge([b, g, r])
-        adjusted = np.clip(adjusted, 0, 255).astype(np.uint8)
-
-        return adjusted
-    
     def timer_callback(self):
         temp = self.img_cv
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
@@ -212,94 +193,98 @@ class SignRecognitionNode(rclpy.node.Node):
         maskR = cv2.resize(mask, (img_width//scalar, img_height//scalar))
         maskR = cv2.resize(maskR, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
-        # do fine crop
-        sensitivity = 140
-        threshold = 3000
-
-        bright_mask =  cv2.inRange(maskR, sensitivity, 255)
-        row_counts = np.sum(bright_mask, axis=1) // threshold
-        col_counts = np.sum(bright_mask, axis=0) // threshold
-
         #print(col_counts)
 
-        rows_nz = np.nonzero(row_counts)[0] - 1
-        cols_nz = np.nonzero(col_counts)[0] - 1
-        cv2.imshow("M1", maskR)
+        sensitivity = 140
+        min_area = 1000
+        max_area = 100 * 100
 
-        if np.sum(rows_nz) > 0 and sum(cols_nz) > 0:       # Only do when blue is found
-            maskR = maskR[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
+        # 1. Threshold to isolate bright regions
+        bright_mask = cv2.inRange(maskR, sensitivity, 255)
 
-            top = max(0, rows_nz[0] - padding)
-            bottom = min(img_height, rows_nz[-1] + padding)
-            left = max(0, cols_nz[0] - padding)
-            right = min(img_width, cols_nz[-1] + padding)
+        # 2. Find connected components
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bright_mask)
 
-            square_size = max(bottom - top, right - left)
+        # 3. Filter components by size
+        valid_components = []
+        for i in range(1, num_labels):               # skip background (label 0)
+            x, y, w, h, area = stats[i]
 
-            center_row = (top + bottom) // 2
-            center_col = (left + right) // 2
+            # mean grey value inside this component
+            comp_mask = (labels[y:y+h, x:x+w] == i)
+            mean_val  = bright_mask[y:y+h, x:x+w][comp_mask].mean()
 
-            half_size = square_size // 2
-            new_top = max(0, center_row - half_size)
-            new_bottom = min(img_height, center_row + half_size)
-            new_left = max(0, center_col - half_size)
-            new_right = min(img_width, center_col + half_size)
+            if (min_area <= area <= max_area) and (mean_val >= sensitivity):
+                valid_components.append((x, y, w, h, mean_val))
+                print(area)
 
-            if new_bottom - new_top < square_size:
-                if new_top == 0:
-                    new_bottom = min(img_height, new_top + square_size)
-                elif new_bottom == img_height:
-                    new_top = max(0, new_bottom - square_size)
 
-            if new_right - new_left < square_size:
-                if new_left == 0:
-                    new_right = min(img_width, new_left + square_size)
-                elif new_right == img_width:
-                    new_left = max(0, new_right - square_size)
+        # 4. If no valid components, return None
+        if valid_components:
+            # Pick the largest valid component (or first, or one nearest center — depends on your need)
+            x, y, w, h, _ = max(valid_components, key=lambda item: item[4])
 
-            precise_crop = crop_img[new_top:new_bottom, new_left:new_right]
+            # 5.a Return bottom-left and top-right corners
+            side = max(w, h)
+            x -= (side - w) // 2
+            y -= (side - h) // 2
+            x = max(0, x)                       # keep inside image
+            y = max(0, y)
+            # (optionally clamp x+side ≤ width and y+side ≤ height if needed)
+
+            # 5 b. update corners
+            bottom_left = (x, y + side)
+            top_right   = (x + side, y)
+
+            maskR = cv2.cvtColor(maskR, cv2.COLOR_GRAY2BGR)
+            cv2.rectangle(maskR, (bottom_left[0], bottom_left[1]), (top_right[0], top_right[1]), (0, 0, 240), 2)
+            cv2.imshow("JJJJ", maskR)
+            maskR = cv2.cvtColor(maskR, cv2.COLOR_BGR2GRAY)
+            maskR = maskR[max(0, bottom_left[1] - padding) : min(img_height, top_right[1] + padding), max(0, bottom_left[0] - padding) : min(img_width, top_right[0] + (padding))]
+
+            precise_crop = crop_img[top_right[1]:bottom_left[1], bottom_left[0]:top_right[0]]
             max_b = np.max(precise_crop)
             precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8)
-            #precise_crop = self.adjustSign(precise_crop)
 
-            #cv2.rectangle(img_v, (crop_L + new_left, crop_T + new_bottom), (crop_L + new_right, crop_T + new_top), (0, 0, 240), 2)
+            cv2.rectangle(img_v, (crop_L + bottom_left[0], crop_T + bottom_left[1]), (crop_L + top_right[0], crop_T + top_right[1]), (0, 0, 240), 2)
             #cv2.rectangle(crop_img, (new_left, new_bottom), (new_right, new_top), (0, 0, 240), 2)
 
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
             #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
 
-            cv2.imshow("M2", maskR)
 
-            #cv2.imshow("I", precise_crop)
+            cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
+            #print(precise_crop.shape)
 
-            if maskR.shape[0] > 1 and maskR.shape[1] > 1:
-                precise_crop2 = cv2.resize(precise_crop, (100, 100))
-                pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
-                cv2.imshow("GGG", pcg)
-                #compare to test images
-                scores = []
-                for i in self.image_list:
-                #for i in self.crop_list:
-                    #i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
-                    scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
+            print("CC")
+            precise_crop2 = cv2.resize(precise_crop, (100, 100))
+            pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
+            cv2.imshow("GGG", pcg)
+            #compare to test images
+            scores = []
+            for i in self.image_list:
+            #for i in self.crop_list:
+                #i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
+                scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
 
-                #self.get_logger().info(str(scores))
+            #self.get_logger().info(str(scores))
 
-                scores = np.array(scores)
-                #find best match
-                i = np.argmax(scores)
-                t = (self.SignType(i))
-                if scores[i] > 0.44:
-                    msg = Int64()
-                    msg.data = int(i)
-                    self.publisher_.publish(msg)
-                    self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
-                else:
-                    print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+            scores = np.array(scores)
+            #find best match
+            i = np.argmax(scores)
+            t = (self.SignType(i))
+            if scores[i] > 0.44:
+                msg = Int64()
+                msg.data = int(i)
+                self.publisher_.publish(msg)
+                self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+            else:
+                print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
-                cv2.imshow("T", precise_crop2)
+
         cv2.imshow("V", img_v)
+
         cv2.waitKey(1)
 
 def main(args=None):
