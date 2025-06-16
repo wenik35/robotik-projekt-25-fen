@@ -3,6 +3,7 @@ import rclpy.node
 import cv2
 import numpy as np
 
+from collections import Counter
 from enum import Enum
 from std_msgs.msg import Int64
 from sensor_msgs.msg import CompressedImage
@@ -32,7 +33,7 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [100,140,30],
+            'lower_bound' : [98,140,30],
             'upper_bound' : [125,230,120],
             'scalar' : 8,
             'padding' : 8,
@@ -110,6 +111,8 @@ class SignRecognitionNode(rclpy.node.Node):
 
         self.image_list = image_list
         self.lastSign = -1
+
+        self.signBuffer = CyclicBuffer(3)
 
     def parameter_callback(self, params):
         succ = True
@@ -236,7 +239,7 @@ class SignRecognitionNode(rclpy.node.Node):
                 valid_components.append((x, y, w, h, mean_val))
 
         scores = []
-        org = (crop_L, crop_T)
+        org = (crop_L, crop_T - 8)
         
         # 4. If no valid components, return None
         if valid_components:
@@ -253,7 +256,7 @@ class SignRecognitionNode(rclpy.node.Node):
             # 5 b. update corners
             bottom_left = (x, y + side)
             top_right   = (x + side, y)
-            org = (crop_L + bottom_left[0], crop_T + top_right[1] - 5)
+            org = (crop_L + bottom_left[0], crop_T + top_right[1] - 8)
 
             maskR = cv2.cvtColor(maskR, cv2.COLOR_GRAY2BGR)
             cv2.rectangle(maskR, (bottom_left[0], bottom_left[1]), (top_right[0], top_right[1]), (0, 0, 240), 2)
@@ -295,24 +298,79 @@ class SignRecognitionNode(rclpy.node.Node):
                 i = self.lastSign
         t = (self.SignType(i))
 
+        self.signBuffer.append(i)
+        most_common_sign = Counter(self.signBuffer).most_common(1)[0][0]
+
         if(i == -1):
             signInfo = str(t.name)
         else:
             signInfo = str(t.name) + " " + str(100 * scores[i])[:5] + "%"
 
-        if i != self.lastSign:
+        if most_common_sign != self.lastSign:
             self.lastSign = i
             msg = Int64()
             msg.data = int(i)
             self.publisher_.publish(msg)
             self.get_logger().info(signInfo)
 
-        cv2.putText(img_v,str(self.SignType(self.lastSign).name), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 240, 0), 2)
+        cv2.putText(img_v, str(self.SignType(self.lastSign).name), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 240, 0), 2)
 
         cv2.putText(img_v,signInfo, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 240), 2)
+        lastSigns = list(self.signBuffer)
+        for i in range(0, len(lastSigns)):
+            cv2.putText(img_v, str(self.SignType(lastSigns[i]).name), (0, 300 + 20 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 0), 2)
 
         cv2.imshow("V", img_v)
         cv2.waitKey(1)
+
+class CyclicBuffer:
+    """Fixed-size ring buffer that overwrites the oldest elements."""
+
+    def __init__(self, capacity):
+        if capacity <= 0:
+            raise ValueError("capacity must be a positive integer")
+        self._data = [None] * capacity
+        self._capacity = capacity
+        self._start = 0          # index of the oldest element
+        self._size = 0           # number of valid elements
+
+    def append(self, item):
+        """Add item, replacing the oldest one if buffer is full."""
+        if self._size < self._capacity:
+            # still filling—write at logical (start + size) % capacity
+            idx = (self._start + self._size) % self._capacity
+            self._data[idx] = item
+            self._size += 1
+        else:
+            # buffer full—overwrite oldest and advance start pointer
+            self._data[self._start] = item
+            self._start = (self._start + 1) % self._capacity
+
+    def __len__(self):
+        return self._size
+
+    def __iter__(self):
+        """Iterate from oldest to newest."""
+        for i in range(self._size):
+            yield self._data[(self._start + i) % self._capacity]
+
+    def __getitem__(self, idx):
+        """Random access (0 = oldest, -1 = newest)."""
+        if not -self._size <= idx < self._size:
+            raise IndexError("index out of range")
+        if idx < 0:
+            idx += self._size
+        return self._data[(self._start + idx) % self._capacity]
+
+    def clear(self):
+        """Remove all elements."""
+        self._start = 0
+        self._size = 0
+        # optional: wipe data for GC, but not strictly necessary
+        self._data = [None] * self._capacity
+
+    def __repr__(self):
+        return f"CyclicBuffer({list(self)})"        
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, SignRecognitionNode)
