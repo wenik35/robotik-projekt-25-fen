@@ -32,7 +32,7 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [100,170,60],
+            'lower_bound' : [100,170,50],
             'upper_bound' : [110,230,120],
             'scalar' : 8,
             'padding' : 8,
@@ -196,7 +196,7 @@ class SignRecognitionNode(rclpy.node.Node):
         #print(col_counts)
 
         sensitivity = 140
-        min_area = 1000
+        min_area = 900
         max_area = 100 * 100
 
         # 1. Threshold to isolate bright regions
@@ -216,7 +216,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
             if (min_area <= area <= max_area) and (mean_val >= sensitivity):
                 valid_components.append((x, y, w, h, mean_val))
-                print(area)
 
 
         # 4. If no valid components, return None
@@ -257,7 +256,6 @@ class SignRecognitionNode(rclpy.node.Node):
             #cv2.imshow("J", crop2)
             #print(precise_crop.shape)
 
-            print("CC")
             precise_crop2 = cv2.resize(precise_crop, (100, 100))
             pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
             cv2.imshow("GGG", pcg)
