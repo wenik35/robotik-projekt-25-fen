@@ -2,7 +2,6 @@ import rclpy
 import rclpy.node
 import cv2
 import numpy as np
-import time
 
 from enum import Enum
 from std_msgs.msg import Int64
@@ -32,14 +31,14 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [100,120,30],
+            'lower_bound' : [100,140,30],
             'upper_bound' : [125,230,120],
             'scalar' : 8,
             'padding' : 8,
             'crop_L' : 800,
             'crop_R' : 1100,
-            'crop_B' : 480,
-            'crop_T' : 240
+            'crop_B' : 450,
+            'crop_T' : 320
         }
 
         width = 640
@@ -99,8 +98,17 @@ class SignRecognitionNode(rclpy.node.Node):
         image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnRight2.png"), (100, 100)))
 
+        for i in range(0, len(image_list)):
+            image_list[i] = cv2.cvtColor(image_list[i], cv2.COLOR_BGR2GRAY)
+
+            exp_grey = 128
+            image_list[i] = image_list[i].astype(np.float32)
+            avg_grey = np.mean(image_list[i])
+            factor = exp_grey / avg_grey 
+            image_list[i] *= factor
+            image_list[i] = np.clip(image_list[i], 0, 255).astype(np.uint8)
+
         self.image_list = image_list
-        self.sign_List = []
 
     def parameter_callback(self, params):
         succ = True
@@ -140,7 +148,7 @@ class SignRecognitionNode(rclpy.node.Node):
         avg_r = np.mean(img[:, :, 2])
 
         avg_grey = (avg_g + avg_b + avg_r) / 3
-        avg_grey *= exp_grey / avg_grey 
+        avg_grey *= exp_grey / avg_grey
 
         scale_b = (avg_grey / avg_b) * 1.08
         scale_g = (avg_grey / avg_g) * 0.97
@@ -152,6 +160,15 @@ class SignRecognitionNode(rclpy.node.Node):
         img = np.clip(img, 0, 255).astype(np.uint8)
         return img
 
+    def brightBalance(self, img):
+        exp_grey = 128
+        img = img.astype(np.float32)
+        avg_grey = np.mean(img)
+        factor = exp_grey / avg_grey 
+        img *= factor
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        return img
+
     def timer_callback(self):
         temp = self.img_cv
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
@@ -160,7 +177,7 @@ class SignRecognitionNode(rclpy.node.Node):
         crop_R = self.get_parameter('crop_R').get_parameter_value().integer_value
         crop_B = self.get_parameter('crop_B').get_parameter_value().integer_value
         crop_T = self.get_parameter('crop_T').get_parameter_value().integer_value
-        cv2.imshow("N", self.img_cv)
+        #cv2.imshow("N", self.img_cv)
 
         temp = self.whiteBalance(temp)
         temp = cv2.remap(temp,
@@ -177,7 +194,7 @@ class SignRecognitionNode(rclpy.node.Node):
         crop_img = temp[:, crop_L:crop_R] # TODO: Optimize cropping
         crop_img = crop_img[crop_T:crop_B]
         #crop_img = self.whiteBalance(crop_img)
-        cv2.imshow("C", crop_img)
+        #cv2.imshow("C", crop_img)
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
@@ -223,7 +240,7 @@ class SignRecognitionNode(rclpy.node.Node):
         # 4. If no valid components, return None
         if valid_components:
             # Pick the largest valid component (or first, or one nearest center — depends on your need)
-            x, y, w, h, _ = max(valid_components, key=lambda item: item[4])
+            x, y, w, h, area = max(valid_components, key=lambda t: t[4])  # ← t[5] is mean brightness
 
             # 5.a Return bottom-left and top-right corners
             side = max(w, h)
@@ -249,22 +266,20 @@ class SignRecognitionNode(rclpy.node.Node):
 
             cv2.rectangle(img_v, (crop_L + bottom_left[0], crop_T + bottom_left[1]), (crop_L + top_right[0], crop_T + top_right[1]), (0, 0, 240), 2)
 
-            #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
-            #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
-
-            cv2.imshow("I", precise_crop)
+            #cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
             #print(precise_crop.shape)
 
             precise_crop2 = cv2.resize(precise_crop, (100, 100))
             pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
-            cv2.imshow("GGG", pcg)
+            #cv2.imshow("GGG", pcg)
+            pcg = self.brightBalance(pcg)
+            #cv2.imshow("HHH", pcg)
+
             #compare to test images
             scores = []
             for i in self.image_list:
-            #for i in self.crop_list:
-                #i = cv2.resize(cv2.Canny(i, 50, 200), (100,100))
-                scores.append(structural_similarity(cv2.cvtColor(i, cv2.COLOR_BGR2GRAY), cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY), gaussian_weights=True, multichannel=False))
+                scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
 
             #self.get_logger().info(str(scores))
 
