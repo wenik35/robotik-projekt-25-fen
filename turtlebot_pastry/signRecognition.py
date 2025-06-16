@@ -235,13 +235,14 @@ class SignRecognitionNode(rclpy.node.Node):
                 valid_components.append((x, y, w, h, mean_val))
 
         scores = []
+        org = (crop_L, crop_T)
         
         # 4. If no valid components, return None
         if valid_components:
             # Pick the largest valid component (or first, or one nearest center — depends on your need)
             x, y, w, h, area = max(valid_components, key=lambda t: t[4])  # ← t[5] is mean brightness
 
-            # 5.a Return bottom-left and top-right corners
+            # 5 a. Return bottom-left and top-right corners
             side = max(w, h)
             x -= (side - w) // 2
             y -= (side - h) // 2
@@ -251,6 +252,7 @@ class SignRecognitionNode(rclpy.node.Node):
             # 5 b. update corners
             bottom_left = (x, y + side)
             top_right   = (x + side, y)
+            org = (crop_L + bottom_left[0], crop_T + top_right[1] - 5)
 
             maskR = cv2.cvtColor(maskR, cv2.COLOR_GRAY2BGR)
             cv2.rectangle(maskR, (bottom_left[0], bottom_left[1]), (top_right[0], top_right[1]), (0, 0, 240), 2)
@@ -279,6 +281,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         scores = np.array(scores)
         #self.get_logger().info(str(scores))
+        signInfo = ""
  
         if scores.size == 0:
             i = -1
@@ -288,17 +291,22 @@ class SignRecognitionNode(rclpy.node.Node):
                 i = t
             else:
                 i = self.lastSign
+        t = (self.SignType(i))
+
+        if(i == -1):
+            signInfo = (t.name)
+        else:
+            signInfo = str(t.name) + " " + str(100 * scores[i])[:5] + "%"
 
         if i != self.lastSign:
             self.lastSign = i
-            t = (self.SignType(i))
             msg = Int64()
             msg.data = int(i)
             self.publisher_.publish(msg)
-            if(i == -1):
-                self.get_logger().info(str(t.name))
-            else:
-                self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+
+            self.get_logger().info(signInfo)
+
+        cv2.putText(img_v,signInfo, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 240), 2) 
 
         cv2.imshow("V", img_v)
         cv2.waitKey(1)
