@@ -32,12 +32,12 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [100,170,50],
-            'upper_bound' : [110,230,120],
+            'lower_bound' : [100,120,30],
+            'upper_bound' : [125,230,120],
             'scalar' : 8,
             'padding' : 8,
-            'crop_L' : 790,
-            'crop_R' : 1090,
+            'crop_L' : 800,
+            'crop_R' : 1100,
             'crop_B' : 480,
             'crop_T' : 240
         }
@@ -61,7 +61,6 @@ class SignRecognitionNode(rclpy.node.Node):
                                                                        balance = 1,
                                                                        new_size = (new_width, new_height),
                                                                        fov_scale = 1.4)
-        
         self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, 
                                                                    D, 
                                                                    np.eye(3), 
@@ -90,7 +89,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
 
         # create timer to periodically invoke the driving logic
-        timer_period = 0.05  # seconds
+        timer_period = 0.04  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
@@ -171,7 +170,6 @@ class SignRecognitionNode(rclpy.node.Node):
                          borderMode = cv2.BORDER_CONSTANT)
         #cv2.imshow("Noo", temp)
 
-        
         img_v = temp.copy()
         cv2.rectangle(img_v, (crop_L, crop_B), (crop_R, crop_T), (0, 240, 0), 2)
         
@@ -191,16 +189,21 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # scaling mask to remove artifacts
         maskR = cv2.resize(mask, (img_width//scalar, img_height//scalar))
+        nz_rows = (maskR != 0).sum(axis=1) == 1         # rows with exactly one non-black pixel
+        nz_cols = (maskR != 0).sum(axis=0) == 1         # cols with exactly one non-black pixel
+        singleton  = (maskR != 0) & (nz_rows[:, None] | nz_cols[None, :])
+        maskR[singleton] = 0
         maskR = cv2.resize(maskR, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
         #print(col_counts)
 
-        sensitivity = 140
-        min_area = 900
+        sensitivity = 120
+        min_area = 1000
         max_area = 100 * 100
 
         # 1. Threshold to isolate bright regions
         bright_mask = cv2.inRange(maskR, sensitivity, 255)
+        sensitivity = 120
 
         # 2. Find connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bright_mask)
@@ -216,7 +219,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
             if (min_area <= area <= max_area) and (mean_val >= sensitivity):
                 valid_components.append((x, y, w, h, mean_val))
-
 
         # 4. If no valid components, return None
         if valid_components:
@@ -246,11 +248,9 @@ class SignRecognitionNode(rclpy.node.Node):
             precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8)
 
             cv2.rectangle(img_v, (crop_L + bottom_left[0], crop_T + bottom_left[1]), (crop_L + top_right[0], crop_T + top_right[1]), (0, 0, 240), 2)
-            #cv2.rectangle(crop_img, (new_left, new_bottom), (new_right, new_top), (0, 0, 240), 2)
 
             #precise_crop = crop_img[max(0, rows_nz[0] - padding) : min(img_height, rows_nz[-1] + padding), max(0, cols_nz[0] - padding) : min(img_width, cols_nz[-1] + (padding))]
             #crop2 = crop_img[max(0, rows_nz[0] - buffer) : min(img_height, rows_nz[-1] + buffer), max(0, cols_nz[0] - buffer) : min(img_width, cols_nz[-1] + (buffer))]
-
 
             cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
@@ -279,7 +279,6 @@ class SignRecognitionNode(rclpy.node.Node):
                 self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
             else:
                 print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
-
 
         cv2.imshow("V", img_v)
 
