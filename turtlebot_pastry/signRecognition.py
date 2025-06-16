@@ -72,7 +72,7 @@ class SignRecognitionNode(rclpy.node.Node):
         for param_name in self.params.keys():
             self.params[param_name] = self.get_parameter(param_name).value
 
-        self.img_cv = np.ones((480,640,3), dtype= "uint8")
+        self.img_cv = np.ones((height, width, 3), dtype= "uint8")
 
         self.add_on_set_parameters_callback(self.parameter_callback)
 
@@ -92,7 +92,6 @@ class SignRecognitionNode(rclpy.node.Node):
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
-
         image_list.append(cv2.resize(cv2.imread("./Media/Parking2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/GoStraight2.png"), (100, 100)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft2.png"), (100, 100)))
@@ -100,7 +99,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         for i in range(0, len(image_list)):
             image_list[i] = cv2.cvtColor(image_list[i], cv2.COLOR_BGR2GRAY)
-
+            # apparently we can't just call self.brightBalance() here :/
             exp_grey = 128
             image_list[i] = image_list[i].astype(np.float32)
             avg_grey = np.mean(image_list[i])
@@ -119,7 +118,6 @@ class SignRecognitionNode(rclpy.node.Node):
             else:
                 succ = False
         return SetParametersResult(successful = succ)
-
 
     def scanner_callback(self, data):
         # convert message to opencv image
@@ -212,8 +210,6 @@ class SignRecognitionNode(rclpy.node.Node):
         maskR[singleton] = 0
         maskR = cv2.resize(maskR, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
 
-        #print(col_counts)
-
         sensitivity = 120
         min_area = 1000
         max_area = 100 * 100
@@ -268,7 +264,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
             #cv2.imshow("I", precise_crop)
             #cv2.imshow("J", crop2)
-            #print(precise_crop.shape)
 
             precise_crop2 = cv2.resize(precise_crop, (100, 100))
             pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
