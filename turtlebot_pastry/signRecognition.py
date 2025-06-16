@@ -14,6 +14,7 @@ from skimage.metrics import structural_similarity
 class SignRecognitionNode(rclpy.node.Node):
 
     class SignType(Enum):
+        NONE = -1
         PARKING = 0
         GO_STRAIGHT = 1
         TURN_LEFT = 2
@@ -38,7 +39,7 @@ class SignRecognitionNode(rclpy.node.Node):
             'crop_L' : 800,
             'crop_R' : 1100,
             'crop_B' : 450,
-            'crop_T' : 320
+            'crop_T' : 320,
         }
 
         width = 640
@@ -108,6 +109,7 @@ class SignRecognitionNode(rclpy.node.Node):
             image_list[i] = np.clip(image_list[i], 0, 255).astype(np.uint8)
 
         self.image_list = image_list
+        self.lastSign = -1
 
     def parameter_callback(self, params):
         succ = True
@@ -233,6 +235,9 @@ class SignRecognitionNode(rclpy.node.Node):
             if (min_area <= area <= max_area) and (mean_val >= sensitivity):
                 valid_components.append((x, y, w, h, mean_val))
 
+        scores = []
+        
+
         # 4. If no valid components, return None
         if valid_components:
             # Pick the largest valid component (or first, or one nearest center — depends on your need)
@@ -272,26 +277,33 @@ class SignRecognitionNode(rclpy.node.Node):
             #cv2.imshow("HHH", pcg)
 
             #compare to test images
-            scores = []
             for i in self.image_list:
                 scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
 
-            #self.get_logger().info(str(scores))
-
-            scores = np.array(scores)
-            #find best match
-            i = np.argmax(scores)
-            t = (self.SignType(i))
-            if scores[i] > 0.44:
-                msg = Int64()
-                msg.data = int(i)
-                self.publisher_.publish(msg)
-                self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+        scores = np.array(scores)
+        #self.get_logger().info(str(scores))
+ 
+        if scores.size == 0:
+            i = -1
+        else:
+            t = np.argmax(scores) #find best match
+            if scores[t] > 0.44:
+                i = t
             else:
-                print(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
+                i = self.lastSign
+
+        if i != self.lastSign:
+            self.lastSign = i
+            t = (self.SignType(i))
+            msg = Int64()
+            msg.data = int(i)
+            self.publisher_.publish(msg)
+            if(i == -1):
+                self.get_logger().info(str(t.name))
+            else:
+                self.get_logger().info(str(t.name) + " " + str(100 * scores[i])[:5] + "%")
 
         cv2.imshow("V", img_v)
-
         cv2.waitKey(1)
 
 def main(args=None):
