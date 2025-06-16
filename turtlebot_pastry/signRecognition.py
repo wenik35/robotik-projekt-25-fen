@@ -39,7 +39,7 @@ class SignRecognitionNode(rclpy.node.Node):
             'crop_L' : 800,
             'crop_R' : 1100,
             'crop_B' : 450,
-            'crop_T' : 320,
+            'crop_T' : 310,
         }
 
         width = 640
@@ -201,8 +201,9 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # convert to binary
         mask = self.to_binary(crop_img)
+        img_v[820 :  820 + mask.shape[0], 490 : 490 + mask.shape[1]] = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
-        cv2.imshow("M0", mask)
+        #cv2.imshow("M0", mask)
 
         # scaling mask to remove artifacts
         maskR = cv2.resize(mask, (img_width//scalar, img_height//scalar))
@@ -256,7 +257,8 @@ class SignRecognitionNode(rclpy.node.Node):
 
             maskR = cv2.cvtColor(maskR, cv2.COLOR_GRAY2BGR)
             cv2.rectangle(maskR, (bottom_left[0], bottom_left[1]), (top_right[0], top_right[1]), (0, 0, 240), 2)
-            cv2.imshow("JJJJ", maskR)
+            img_v[0 :  0 + maskR.shape[0], 490 : 490 + maskR.shape[1]] = maskR
+            #cv2.imshow("JJJJ", maskR)
             maskR = cv2.cvtColor(maskR, cv2.COLOR_BGR2GRAY)
             maskR = maskR[max(0, bottom_left[1] - padding) : min(img_height, top_right[1] + padding), max(0, bottom_left[0] - padding) : min(img_width, top_right[0] + (padding))]
 
