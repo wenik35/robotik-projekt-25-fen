@@ -218,7 +218,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # 1. Threshold to isolate bright regions
         bright_mask = cv2.inRange(maskR, sensitivity, 255)
-        sensitivity = 120
 
         # 2. Find connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bright_mask)
@@ -237,7 +236,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
         scores = []
         
-
         # 4. If no valid components, return None
         if valid_components:
             # Pick the largest valid component (or first, or one nearest center — depends on your need)
@@ -249,7 +247,6 @@ class SignRecognitionNode(rclpy.node.Node):
             y -= (side - h) // 2
             x = max(0, x)                       # keep inside image
             y = max(0, y)
-            # (optionally clamp x+side ≤ width and y+side ≤ height if needed)
 
             # 5 b. update corners
             bottom_left = (x, y + side)
