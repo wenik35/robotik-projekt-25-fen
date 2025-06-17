@@ -1,16 +1,16 @@
-import rclpy
-import rclpy.node
 import cv2
 import numpy as np
+import rclpy
+import rclpy.node
 
 from collections import Counter
-from enum import Enum
-from std_msgs.msg import Int64
-from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
+from enum import Enum 
 from rcl_interfaces.msg import SetParametersResult
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from sensor_msgs.msg import CompressedImage
 from skimage.metrics import structural_similarity
+from std_msgs.msg import Int64
+from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 
 class SignRecognitionNode(rclpy.node.Node):
 
@@ -33,10 +33,9 @@ class SignRecognitionNode(rclpy.node.Node):
                                           depth=1)
 
         self.params = {
-            'lower_bound' : [98,140,30],
+            'lower_bound' : [98,100,30],
             'upper_bound' : [125,230,120],
             'scalar' : 8,
-            'padding' : 8,
             'crop_L' : 800,
             'crop_R' : 1100,
             'crop_B' : 450,
@@ -65,7 +64,8 @@ class SignRecognitionNode(rclpy.node.Node):
         self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, 
                                                                    D, 
                                                                    np.eye(3), 
-                                                                   new_K, ((new_width, new_height)),
+                                                                   new_K, 
+                                                                   ((new_width, new_height)),
                                                                    cv2.CV_16SC2)
 
         for param_name, default_value in self.params.items():
@@ -83,7 +83,7 @@ class SignRecognitionNode(rclpy.node.Node):
             CompressedImage,
             '/image_raw/compressed',
             self.scanner_callback,
-            qos_profile=qos_policy)
+            qos_profile = qos_policy)
         self.subscription  # prevent unused variable warning
 
         # create publisher for driving commands
@@ -112,7 +112,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.image_list = image_list
         self.lastSign = -1
 
-        self.signBuffer = CyclicBuffer(3)
+        self.signBuffer = CyclicBuffer(5)
 
     def parameter_callback(self, params):
         succ = True
@@ -128,15 +128,6 @@ class SignRecognitionNode(rclpy.node.Node):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #cv2.imshow("IMG", self.img_cv)
-
-    def to_binary(self, img):
-        lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
-        lower_bound = np.array(lower_bound, dtype = "uint8")
-        upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
-        upper_bound = np.array(upper_bound, dtype = "uint8")
-
-        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        return cv2.inRange(hsv_img, lower_bound, upper_bound)
     
     def whiteBalance(self, img):
         exp_grey = 120
@@ -153,8 +144,10 @@ class SignRecognitionNode(rclpy.node.Node):
         avg_grey = (avg_g + avg_b + avg_r) / 3
         avg_grey *= exp_grey / avg_grey
 
+        # TODO maybe get some better perf by moving the mult
+        # to the channel factors directly?
+        scale_g = (avg_grey / avg_g) * 0.97 
         scale_b = (avg_grey / avg_b) * 1.08
-        scale_g = (avg_grey / avg_g) * 0.97
         scale_r = (avg_grey / avg_r)
 
         img[:, :, 0] *= scale_b
@@ -175,11 +168,14 @@ class SignRecognitionNode(rclpy.node.Node):
     def timer_callback(self):
         temp = self.img_cv
         scalar = self.get_parameter('scalar').get_parameter_value().integer_value
-        padding = self.get_parameter('padding').get_parameter_value().integer_value
         crop_L = self.get_parameter('crop_L').get_parameter_value().integer_value
         crop_R = self.get_parameter('crop_R').get_parameter_value().integer_value
         crop_B = self.get_parameter('crop_B').get_parameter_value().integer_value
         crop_T = self.get_parameter('crop_T').get_parameter_value().integer_value
+        lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
+        lower_bound = np.array(lower_bound, dtype = "uint8")
+        upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value
+        upper_bound = np.array(upper_bound, dtype = "uint8")
         #cv2.imshow("N", self.img_cv)
 
         temp = self.whiteBalance(temp)
@@ -203,7 +199,7 @@ class SignRecognitionNode(rclpy.node.Node):
         img_height = crop_img.shape[0]
 
         # convert to binary
-        mask = self.to_binary(crop_img)
+        mask = cv2.inRange(cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV), lower_bound, upper_bound)
         img_v[820 :  820 + mask.shape[0], 490 : 490 + mask.shape[1]] = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
         #cv2.imshow("M0", mask)
@@ -262,20 +258,16 @@ class SignRecognitionNode(rclpy.node.Node):
             cv2.rectangle(maskR, (bottom_left[0], bottom_left[1]), (top_right[0], top_right[1]), (0, 0, 240), 2)
             img_v[0 :  0 + maskR.shape[0], 490 : 490 + maskR.shape[1]] = maskR
             #cv2.imshow("JJJJ", maskR)
-            maskR = cv2.cvtColor(maskR, cv2.COLOR_BGR2GRAY)
-            maskR = maskR[max(0, bottom_left[1] - padding) : min(img_height, top_right[1] + padding), max(0, bottom_left[0] - padding) : min(img_width, top_right[0] + (padding))]
 
-            precise_crop = crop_img[top_right[1]:bottom_left[1], bottom_left[0]:top_right[0]]
+            precise_crop = crop_img[top_right[1] : bottom_left[1], bottom_left[0] : top_right[0]]
             max_b = np.max(precise_crop)
-            precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8)
+            precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8) # TODO check if this is actually beneficial
 
             cv2.rectangle(img_v, (crop_L + bottom_left[0], crop_T + bottom_left[1]), (crop_L + top_right[0], crop_T + top_right[1]), (0, 0, 240), 2)
 
             #cv2.imshow("I", precise_crop)
-            #cv2.imshow("J", crop2)
 
-            precise_crop2 = cv2.resize(precise_crop, (100, 100))
-            pcg = cv2.cvtColor(precise_crop2, cv2.COLOR_BGR2GRAY)
+            pcg = cv2.cvtColor(cv2.resize(precise_crop, (100, 100)), cv2.COLOR_BGR2GRAY)
             #cv2.imshow("GGG", pcg)
             pcg = self.brightBalance(pcg)
             #cv2.imshow("HHH", pcg)
@@ -283,42 +275,48 @@ class SignRecognitionNode(rclpy.node.Node):
             #compare to test images
             for i in self.image_list:
                 scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
+                #_, max_val, _, _ = cv2.minMaxLoc(cv2.matchTemplate(pcg, i, cv2.TM_SQDIFF_NORMED))
+                #scores.append(max_val)
 
         scores = np.array(scores)
         #self.get_logger().info(str(scores))
         signInfo = ""
  
         if scores.size == 0:
-            i = -1
+            sign_int = -1
         else:
-            t = np.argmax(scores) #find best match
-            if scores[t] > 0.44:
-                i = t
+            best = np.argmax(scores)    #find best match
+            if scores[best] > 0.44:
+                sign_int = best
             else:
-                i = self.lastSign
-        t = (self.SignType(i))
+                sign_int = self.lastSign
+        sign = (self.SignType(sign_int))
 
-        self.signBuffer.append(i)
+        self.signBuffer.append(sign_int)
         most_common_sign = Counter(self.signBuffer).most_common(1)[0][0]
 
-        if(i == -1):
-            signInfo = str(t.name)
+        if(sign_int == -1):    # TODO probaby possible to do this in a slightly more compact way
+            signInfo = str(sign.name)
         else:
-            signInfo = str(t.name) + " " + str(100 * scores[i])[:5] + "%"
+            signInfo = str(sign.name) + " " + str(100 * scores[sign_int])[:5] + "%"
 
         if most_common_sign != self.lastSign:
-            self.lastSign = most_common_sign
+            #self.lastSign = most_common_sign
             msg = Int64()
             msg.data = int(most_common_sign)
             self.publisher_.publish(msg)
             self.get_logger().info(signInfo)
 
-        cv2.putText(img_v, str(self.SignType(self.lastSign).name), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 240, 0), 2)
+        self.lastSign = sign_int
 
-        cv2.putText(img_v,signInfo, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 240), 2)
-        lastSigns = list(self.signBuffer)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        cv2.putText(img_v, str(self.SignType(self.lastSign).name), (10, 30), font, 0.6, (0, 240, 0), 2)
+
+        cv2.putText(img_v,signInfo, org, font, 0.5, (0, 0, 240), 2)
+        lastSigns = list(self.signBuffer)   # TODO this can be done more concisely
         for i in range(0, len(lastSigns)):
-            cv2.putText(img_v, str(self.SignType(lastSigns[i]).name), (0, 300 + 20 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 180, 0), 2)
+            cv2.putText(img_v, str(self.SignType(lastSigns[i]).name), (0, 300 + 20 * i), font, 0.5, (0, 180, 0), 2)
 
         cv2.imshow("V", img_v)
         cv2.waitKey(1)

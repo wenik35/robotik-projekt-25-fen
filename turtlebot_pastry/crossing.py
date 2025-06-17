@@ -65,7 +65,7 @@ class crossingNode(rclpy.node.Node):
         self.status_publisher = self.create_publisher(String, 'crossing_status', qos_profile=qos_policy)
         self.status_status = String()
         self.status_timer = self.create_timer(1, self.status_callback)
-        self.status = "Active"
+        self.status = "Paused"
         self.lineNo = 0
         self.direction = 2
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
@@ -75,13 +75,13 @@ class crossingNode(rclpy.node.Node):
         self.status_publisher.publish(self.status_status)
 
     def sign_callback(self, data):
-        '''
+        self.get_logger().info(data)
         if 0 < data.data < 4 and self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
             self.status_callback()
             self.direction = data.data
-        '''
+
         if self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
@@ -98,10 +98,10 @@ class crossingNode(rclpy.node.Node):
             self.status_callback()
             self.crossing()
 
-
     def crossing(self):
         self.crossing_status.data = True
         self.notice_publisher.publish(self.crossing_status)
+        print(self.direction)
         match self.direction:
             case 1:
                 self.GoStraight()
