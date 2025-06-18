@@ -5,7 +5,7 @@ import rclpy.node
 
 from collections import Counter
 from cv_bridge import CvBridge
-from enum import Enum 
+from enum import Enum
 from rcl_interfaces.msg import SetParametersResult
 from sensor_msgs.msg import CompressedImage
 from skimage.metrics import structural_similarity
@@ -46,7 +46,7 @@ class SignRecognitionNode(rclpy.node.Node):
         height = 480
         new_width = 1280
         new_height = 960
-        
+
         v = 480.0
 
         K = np.array([[v, 0.0, width / 2],
@@ -54,17 +54,17 @@ class SignRecognitionNode(rclpy.node.Node):
                       [0.0, 0.0, 1.0]])
         D = np.array([[-0.3], [0.1], [0.0], [0.0]])
 
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, 
-                                                                       D, 
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K,
+                                                                       D,
                                                                        (width, height),
                                                                        np.eye(3),
                                                                        balance = 1,
                                                                        new_size = (new_width, new_height),
                                                                        fov_scale = 1.4)
-        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, 
-                                                                   D, 
-                                                                   np.eye(3), 
-                                                                   new_K, 
+        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K,
+                                                                   D,
+                                                                   np.eye(3),
+                                                                   new_K,
                                                                    ((new_width, new_height)),
                                                                    cv2.CV_16SC2)
 
@@ -90,7 +90,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
 
         # create timer to periodically invoke the driving logic
-        timer_period = 0.04  # seconds
+        timer_period = 0.05  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
@@ -105,7 +105,7 @@ class SignRecognitionNode(rclpy.node.Node):
             exp_grey = 128
             image_list[i] = image_list[i].astype(np.float32)
             avg_grey = np.mean(image_list[i])
-            factor = exp_grey / avg_grey 
+            factor = exp_grey / avg_grey
             image_list[i] *= factor
             image_list[i] = np.clip(image_list[i], 0, 255).astype(np.uint8)
 
@@ -128,7 +128,7 @@ class SignRecognitionNode(rclpy.node.Node):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #cv2.imshow("IMG", self.img_cv)
-    
+
     def whiteBalance(self, img):
         exp_grey = 120
         b, g, r = cv2.split(img)
@@ -146,7 +146,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # TODO maybe get some better perf by moving the mult
         # to the channel factors directly?
-        scale_g = (avg_grey / avg_g) * 0.97 
+        scale_g = (avg_grey / avg_g) * 0.97
         scale_b = (avg_grey / avg_b) * 1.08
         scale_r = (avg_grey / avg_r)
 
@@ -160,7 +160,7 @@ class SignRecognitionNode(rclpy.node.Node):
         exp_grey = 128
         img = img.astype(np.float32)
         avg_grey = np.mean(img)
-        factor = exp_grey / avg_grey 
+        factor = exp_grey / avg_grey
         img *= factor
         img = np.clip(img, 0, 255).astype(np.uint8)
         return img
@@ -188,7 +188,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         img_v = temp.copy()
         cv2.rectangle(img_v, (crop_L, crop_B), (crop_R, crop_T), (0, 240, 0), 2)
-        
+
         # cropping image
         crop_img = temp[:, crop_L:crop_R] # TODO: Optimize cropping
         crop_img = crop_img[crop_T:crop_B]
@@ -236,7 +236,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         scores = []
         org = (crop_L, crop_T - 8)
-        
+
         # 4. If no valid components, return None
         if valid_components:
             # Pick the largest valid component (or first, or one nearest center — depends on your need)
@@ -281,7 +281,7 @@ class SignRecognitionNode(rclpy.node.Node):
         scores = np.array(scores)
         #self.get_logger().info(str(scores))
         signInfo = ""
- 
+
         if scores.size == 0:
             sign_int = -1
         else:
@@ -368,7 +368,7 @@ class CyclicBuffer:
         self._data = [None] * self._capacity
 
     def __repr__(self):
-        return f"CyclicBuffer({list(self)})"        
+        return f"CyclicBuffer({list(self)})"
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, SignRecognitionNode)

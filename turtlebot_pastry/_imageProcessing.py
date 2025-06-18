@@ -104,7 +104,7 @@ class imageProcessingNode(rclpy.node.Node):
         raw_imgs = np.concatenate((cut_img, grayscale_color, masked_color), axis=0)
         lane_imgs = np.concatenate((lines_img, filtered_lines_img, lanes), axis=0)
         combined = np.concatenate((raw_imgs, lane_imgs), axis=1)
-        cv2.imshow("lanes", combined)
+        #cv2.imshow("lanes", combined)
 
 
         # detect parking bay
@@ -145,7 +145,7 @@ def region(image):
     trapezoid = np.array([[0.3*width, height//3], [width - 0.3*width, height//3], [width, height], [0, height]], np.int32)
 
     mask = np.zeros_like(image)
-    
+
     mask = cv2.fillPoly(mask, [trapezoid], 255)
     mask = cv2.bitwise_and(image, mask)
     return mask
@@ -204,7 +204,7 @@ def filter_lines(grayscale, lines):
 
             if len(potential_partner) > 1:
                 left_middle = get_middle_point(line_left)
-                
+
                 dists = []
                 for line in potential_partner:
                     right_middle = get_middle_point(line)
@@ -227,12 +227,12 @@ def calculate_steering(lines):
     elif len(left) == 0:
         return 90 - line_angle(right)
     elif len(right) == 0:
-        return 90 - line_angle(left) 
+        return 90 - line_angle(left)
     else :
         x1, y1, x2, y2 = left
         slope_left, y_int_left = np.polyfit((x1, x2), (y1, y2), 1)
 
-        x1, y1, x2, y2 = right 
+        x1, y1, x2, y2 = right
         slope_right, y_int_right = np.polyfit((x1, x2), (y1, y2), 1)
 
         left_angle = line_angle(left)
@@ -246,13 +246,13 @@ def calculate_steering(lines):
         return 90 - (left_angle + right_angle) // 2
 
 def get_middle_point(line):
-    x1, y1, x2, y2 = line 
+    x1, y1, x2, y2 = line
     x_middle = (x1 + x2) // 2
     y_middle = (y1 + y2) // 2
     return (x_middle, y_middle)
 
 def get_x_sorted(line):
-    x1, y1, x2, y2 = line 
+    x1, y1, x2, y2 = line
     if x1 < x2:
         return (x1, x2)
     else:
@@ -267,7 +267,7 @@ def display_lines(image, lines, color=None):
                 if (len(line) > 0):
                     if random_color:
                         color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
-                    x1, y1, x2, y2 = line 
+                    x1, y1, x2, y2 = line
                     cv2.line(lines_image, (x1, y1), (x2, y2), color, 2)
             except Exception as e:
                 print("Error in display_lines: ", e)
@@ -280,7 +280,7 @@ def detect_boundary(image, lines):
     polys = []
     if lines is not None:
         for line in lines:
-            x1, y1, x2, y2 = line 
+            x1, y1, x2, y2 = line
             parameters = np.polyfit((x1, x2), (y1, y2), 1)
             slope = parameters[0]
             y_int = parameters[1]
@@ -289,7 +289,7 @@ def detect_boundary(image, lines):
 
     bound_lines = make_points(image, polys)
     return np.array(bound_lines)
-    
+
 def average(image, lines):
     left = []
     right = []
@@ -311,8 +311,8 @@ def average(image, lines):
     left_line = []
     if len(left) > 0:
         left_avg = np.average(left, axis=0)
-        left_line = make_points(image, left_avg)    
-    
+        left_line = make_points(image, left_avg)
+
     right_line = []
     if len(right) > 0:
         right_avg = np.average(right, axis=0)
@@ -322,7 +322,7 @@ def average(image, lines):
 
 def make_points(image, line):
     try:
-        slope, y_int = line 
+        slope, y_int = line
         if not (slope == 0.0):  #TODO: why?
             y1 = image.shape[0]
             y2 = 0
@@ -369,7 +369,7 @@ def analyseImageRow(edged, grayscale, line_expected_at):
         if 15 < (edge_indices[i+1] - edge_indices[i]) < 40 and grayscale[height-5, edge_indices[i]+5] > 100:
             max_diff_index = edge_indices[i]
             break
-            
+
     # calculate offset of line from where it is expected
     line_offset = max_diff_index - line_expected_at
     # debug_image_row(img_row, max_diff_index)
@@ -386,10 +386,10 @@ def debug_image_row(img_row, max_diff_index):
     analyzer[(max_diff_index+40)%length] = np.array([0,255,0])
 
     # resize and rotate image for better visualization
-    resized = cv2.resize(analyzer, (0,0), fx=50, fy=1) 
+    resized = cv2.resize(analyzer, (0,0), fx=50, fy=1)
     turned = cv2.rotate(resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
     cv2.imshow("row", turned)
-    
+
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, imageProcessingNode)

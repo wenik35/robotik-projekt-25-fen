@@ -18,7 +18,7 @@ class crossingNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('crossingNode')
 
-        self.declare_parameter('left_time', 4.0)
+        self.declare_parameter('left_time', 3.5)
         self.declare_parameter('straight_time', 6.0)
         self.declare_parameter('line_brightness', 245)
 
@@ -73,26 +73,30 @@ class crossingNode(rclpy.node.Node):
     def status_callback(self):
         self.status_status.data = self.status
         self.status_publisher.publish(self.status_status)
+        self.get_logger().info(self.status)
 
     def sign_callback(self, data):
-        self.get_logger().info(data)
+        self.get_logger().info(str(data.data))
         if 0 < data.data < 4 and self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
             self.status_callback()
             self.direction = data.data
 
+            self.status = "Crossing"
+            self.crossing()
+        """
         if self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
             self.status_callback()
-
+"""
     def scanner_callback(self, data):
         line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
         img = cv2.cvtColor(self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough'), cv2.COLOR_BGR2GRAY)
         check_pixel = max(img[-0:-20, img.shape[1]//2])
-        self.get_logger().info(str(check_pixel))
-        if self.status == "Paused" and check_pixel > line_brightness:
+        #self.get_logger().info(str(check_pixel))
+        if self.status == "Active" and check_pixel > line_brightness:
             self.get_logger().info("LINE FOUND")
             self.status = "Crossing"
             self.status_callback()
@@ -134,6 +138,7 @@ class crossingNode(rclpy.node.Node):
         self.command_publisher.publish(twist)
         sleep(1.7)
         twist.linear.x = 0.2
+        twist.angular.z = 0.0
         self.command_publisher.publish(twist)
         sleep(time)
 
