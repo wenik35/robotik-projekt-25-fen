@@ -34,6 +34,11 @@ class crossingNode(rclpy.node.Node):
         # init openCV-bridge
         self.bridge = CvBridge()
 
+        width = 640
+        height = 480
+        self.img_cv = np.ones((height, width, 3), dtype= "uint8")
+
+
         # definition of the QoS in order to receive data despite WiFi
         qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
                                           history=rclpy.qos.HistoryPolicy.KEEP_LAST,
@@ -113,8 +118,8 @@ class crossingNode(rclpy.node.Node):
 """
     def scanner_callback(self, data):
         line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-        img = cv2.cvtColor(self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough'), cv2.COLOR_BGR2GRAY)
-        check_pixel = max(img[-0:-20, img.shape[1]//2])
+        self.img_cv = cv2.cvtColor(self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough'), cv2.COLOR_BGR2GRAY)
+        check_pixel = max(self.img_cv[-0:-20, self.img_cv.shape[1]//2])
         self.get_logger().info(str(check_pixel))
         if self.status == "Active" and check_pixel > line_brightness:
             self.get_logger().info("LINE FOUND")
@@ -167,6 +172,7 @@ class crossingNode(rclpy.node.Node):
 
     def line_callback(self, data):
         sleep(1)
+        self.get_logger().info("PARKING LINE FOUND")
 
     def follow_line_callback(self, data):
          sleep(1)
