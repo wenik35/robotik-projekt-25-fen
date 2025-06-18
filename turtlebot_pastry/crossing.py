@@ -10,6 +10,7 @@ from std_msgs.msg import Int64, String, Bool
 from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
+from rcl_interfaces.msg import SetParametersResult
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 from venv import create
 
@@ -18,9 +19,17 @@ class crossingNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('crossingNode')
 
-        self.declare_parameter('left_time', 3.5)
-        self.declare_parameter('straight_time', 6.0)
-        self.declare_parameter('line_brightness', 245)
+        self.params = {
+            'left_time' : 3.5,
+            'straight_time' : 5.0,
+            'line_brightness' : 245,
+        }
+
+        for param_name, default_value in self.params.items():
+            self.declare_parameter(param_name, default_value)
+
+        for param_name in self.params.keys():
+            self.params[param_name] = self.get_parameter(param_name).value
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -31,6 +40,8 @@ class crossingNode(rclpy.node.Node):
                                           depth=1)
 
         # create subscribers for image data with changed qos
+        self.add_on_set_parameters_callback(self.parameter_callback)
+
         self.signSubscription = self.create_subscription(
             Int64,
             'sign_seen',
@@ -66,9 +77,18 @@ class crossingNode(rclpy.node.Node):
         self.status_status = String()
         self.status_timer = self.create_timer(1, self.status_callback)
         self.status = "Paused"
-        self.lineNo = 0
         self.direction = 2
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
+        #
+    def parameter_callback(self, params):
+        succ = True
+        for param in params:
+            if param.name in self.params:
+                self.params[param.name] = param.value
+                #self.get_logger().info(f"Parameter {param.name} updated to {self.params[param.name]}")
+            else:
+                succ = False
+        return SetParametersResult(successful = succ)
 
     def status_callback(self):
         self.status_status.data = self.status
@@ -83,8 +103,8 @@ class crossingNode(rclpy.node.Node):
             self.status_callback()
             self.direction = data.data
 
-            self.status = "Crossing"
-            self.crossing()
+            #self.status = "Crossing"
+            #self.crossing()
         """
         if self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
@@ -95,7 +115,7 @@ class crossingNode(rclpy.node.Node):
         line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
         img = cv2.cvtColor(self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough'), cv2.COLOR_BGR2GRAY)
         check_pixel = max(img[-0:-20, img.shape[1]//2])
-        #self.get_logger().info(str(check_pixel))
+        self.get_logger().info(str(check_pixel))
         if self.status == "Active" and check_pixel > line_brightness:
             self.get_logger().info("LINE FOUND")
             self.status = "Crossing"
