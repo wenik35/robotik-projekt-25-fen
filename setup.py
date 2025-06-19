@@ -30,7 +30,7 @@ setup(
             'imageProcessing = turtlebot_pastry._imageProcessing:main',
             'changeLane = turtlebot_pastry.changeLane:main',
             'parking = turtlebot_pastry.parking:main',
-            #'crossing = turtlebot_pastry.crossing:main',
+            'crossing = turtlebot_pastry.crossing:main',
 
         ],
     },

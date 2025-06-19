@@ -20,8 +20,9 @@ class crossingNode(rclpy.node.Node):
         super().__init__('crossingNode')
 
         self.params = {
-            'left_time' : 3.5,
-            'straight_time' : 5.0,
+            'left_time' : 3.9,
+            'straight_time' : 3.8,
+            'right_time' : 2.2,
             'line_brightness' : 245,
         }
 
@@ -53,19 +54,6 @@ class crossingNode(rclpy.node.Node):
             self.sign_callback,
             qos_profile=qos_policy)
         self.signSubscription  # prevent unused variable warning
-
-
-        self.follow_line_sub = self.create_subscription(
-            Twist,
-            'follow_path_cmd',
-            self.follow_line_callback,
-            qos_profile=qos_policy)
-
-        self.line_call_sub = self.create_subscription(
-            String,
-            'parking_line',
-            self.line_callback,
-            qos_profile=qos_policy)
 
         self.subscription = self.create_subscription(
             CompressedImage,
@@ -117,11 +105,25 @@ class crossingNode(rclpy.node.Node):
             self.status_callback()
 """
     def scanner_callback(self, data):
-        line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-        self.img_cv = cv2.cvtColor(self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough'), cv2.COLOR_BGR2GRAY)
-        check_pixel = max(self.img_cv[-0:-20, self.img_cv.shape[1]//2])
-        self.get_logger().info(str(check_pixel))
-        if self.status == "Active" and check_pixel > line_brightness:
+        self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
+        #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
+        line_brightness = 160
+        gsimg =self.img_cv
+        gsimg = cv2.remap(gsimg,
+                         self.map1,
+                         self.map2,
+                         interpolation = cv2.INTER_LINEAR,
+                         borderMode = cv2.BORDER_CONSTANT)
+
+        #cv2.imshow("Noo", temp)
+        gsimg = cv2.cvtColor(gsimg, cv2.COLOR_BGR2GRAY)
+        gsimg = gsimg[730 : 760, 500 : 800]
+        brightness = np.mean(gsimg)
+        gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
+        #cv2.line(gsimg, [500, 700], [800, 700], (255,0,0), 2)
+        cv2.imshow("JJ", gsimg)
+        self.get_logger().info(str(brightness))
+        if self.status == "Active" and brightness > line_brightness:
             self.get_logger().info("LINE FOUND")
             self.status = "Crossing"
             self.status_callback()
@@ -168,14 +170,20 @@ class crossingNode(rclpy.node.Node):
         sleep(time)
 
     def TurnRight(self):
-        sleep(5)
+        time = self.get_parameter('right_time').get_parameter_value().double_value
+        twist = Twist()
+        twist.linear.x = 0.2
+        self.command_publisher.publish(twist)
+        sleep(time)
+        twist.linear.x = 0.0
+        twist.angular.z = -1.0
+        self.command_publisher.publish(twist)
+        sleep(1.7)
+        twist.linear.x = 0.2
+        twist.angular.z = 0.0
+        self.command_publisher.publish(twist)
+        sleep(time)
 
-    def line_callback(self, data):
-        sleep(1)
-        self.get_logger().info("PARKING LINE FOUND")
-
-    def follow_line_callback(self, data):
-         sleep(1)
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, crossingNode)

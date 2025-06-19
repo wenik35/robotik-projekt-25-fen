@@ -44,10 +44,6 @@ class SignRecognitionNode(rclpy.node.Node):
             'crop_R' : 1100,
             'crop_B' : 450,
             'crop_T' : 310,
-            'left_time' : 3.9,
-            'straight_time' : 3.8,
-            'right_time' : 2.2,
-            'line_brightness' : 245,
         }
 
         width = 640
@@ -93,13 +89,6 @@ class SignRecognitionNode(rclpy.node.Node):
             self.scanner_callback,
             qos_profile = qos_policy)
         self.subscription  # prevent unused variable warning
-
-        self.signSubscription = self.create_subscription(
-            Int64,
-            'sign_seen',
-            self.sign_callback,
-            qos_profile=qos_policy)
-        self.signSubscription  # prevent unused variable warning
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
@@ -147,44 +136,11 @@ class SignRecognitionNode(rclpy.node.Node):
                 succ = False
         return SetParametersResult(successful = succ)
 
-    def status_callback(self):
-        self.status_status.data = self.status
-        self.status_publisher.publish(self.status_status)
-        self.get_logger().info(self.status)
-
-    def sign_callback(self, data):
-        self.get_logger().info(str(data.data))
-        if 0 < data.data < 4 and self.status == "Paused" or self.status == "Active":
-            self.get_logger().info("SIGN FOUND!")
-            self.status = "Active"
-            self.status_callback()
-            self.direction = data.data
 
     def scanner_callback(self, data):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-        line_brightness = 160
-        gsimg =self.img_cv
-        gsimg = cv2.remap(gsimg,
-                         self.map1,
-                         self.map2,
-                         interpolation = cv2.INTER_LINEAR,
-                         borderMode = cv2.BORDER_CONSTANT)
-
-        #cv2.imshow("Noo", temp)
-        gsimg = cv2.cvtColor(gsimg, cv2.COLOR_BGR2GRAY)
-        gsimg = gsimg[730 : 760, 500 : 800]
-        brightness = np.mean(gsimg)
-        gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
-        #cv2.line(gsimg, [500, 700], [800, 700], (255,0,0), 2)
-        cv2.imshow("JJ", gsimg)
-        self.get_logger().info(str(brightness))
-        if self.status == "Active" and brightness > line_brightness:
-            self.get_logger().info("LINE FOUND")
-            self.status = "Crossing"
-            self.status_callback()
-            self.crossing()
 
 
     def whiteBalance(self, img):
@@ -378,61 +334,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
         cv2.imshow("V", img_v)
         cv2.waitKey(1)
-
-    def crossing(self):
-        self.crossing_status.data = True
-        self.notice_publisher.publish(self.crossing_status)
-        print(self.direction)
-        match self.direction:
-            case 1:
-                self.GoStraight()
-            case 2:
-                self.TurnLeft()
-            case 3:
-                self.TurnRight()
-
-        self.status = "Paused"
-        self.status_callback()
-
-        self.crossing_status.data = False
-        self.notice_publisher.publish(self.crossing_status)
-
-    def GoStraight(self):
-        time = self.get_parameter('straight_time').get_parameter_value().double_value
-        twist = Twist()
-        twist.linear.x = 0.2
-        self.command_publisher.publish(twist)
-        sleep(time)
-
-    def TurnLeft(self):
-        time = self.get_parameter('left_time').get_parameter_value().double_value
-        twist = Twist()
-        twist.linear.x = 0.2
-        self.command_publisher.publish(twist)
-        sleep(time)
-        twist.linear.x = 0.0
-        twist.angular.z = 1.0
-        self.command_publisher.publish(twist)
-        sleep(1.7)
-        twist.linear.x = 0.2
-        twist.angular.z = 0.0
-        self.command_publisher.publish(twist)
-        sleep(time)
-
-    def TurnRight(self):
-        time = self.get_parameter('right_time').get_parameter_value().double_value
-        twist = Twist()
-        twist.linear.x = 0.2
-        self.command_publisher.publish(twist)
-        sleep(time)
-        twist.linear.x = 0.0
-        twist.angular.z = -1.0
-        self.command_publisher.publish(twist)
-        sleep(1.7)
-        twist.linear.x = 0.2
-        twist.angular.z = 0.0
-        self.command_publisher.publish(twist)
-        sleep(time)
 
 
 class CyclicBuffer:
