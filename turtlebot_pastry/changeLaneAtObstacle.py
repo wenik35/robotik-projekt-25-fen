@@ -73,8 +73,11 @@ class changeLaneNode(Node):
                 self.changeLane(toLeft=True)
 
         if self.status == "Driving left":
-            if (self.lastDistanceRight != float("inf")):
-                right_detection = 0.4 < msg.ranges[540] - self.lastDistanceRight
+            if (self.lastDistanceRight < 0.6):
+                distance_d = msg.ranges[540] - self.lastDistanceRight
+                right_detection = 0.4 < distance_d
+
+                # let robot drive forward for a bit to get in front of obstacle
                 sleep(1)
 
                 # message
@@ -97,15 +100,15 @@ class changeLaneNode(Node):
         twist = Twist()
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
-        sleep(1.5)
+        sleep(1.3)
 
         self.turn90Deg(not toLeft)
 
+        # give lane detection node time to react
+        sleep(0.5)
+
         self.laneChange.data = False
         self.notice_publisher.publish(self.laneChange)
-
-        # give control to lane follower for 1 second to get beside obstacle
-        sleep(1.5)
 
         # stop, give back control to lane follower
         self.status = "Driving left" if toLeft else "Driving right"

@@ -6,25 +6,31 @@ def generate_launch_description():
         Node(
             package='turtlebot_pastry',
             executable='stateMachine',
-            name='stateMachine',
+            name='stateMachineNode',
             output='screen'
         ),
         Node(
             package='turtlebot_pastry',
             executable='changeLaneAtObstacle',
-            name='changeLaneAtObstacle',
-            output='screen'
-        ),
-        Node(
-            package='turtlebot_pastry',
-            executable='imageProcessing',
-            name='imageProcessing',
+            name='changeLaneAtObstacleNode',
             output='screen'
         ),
         Node(
             package='turtlebot_pastry',
             executable='followPath',
-            name='followPath',
+            name='followPathNode',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='parking',
+            name='parkingNode',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='signRecognition',
+            name='signRecognitionNode',
             output='screen'
         ),
         Node(
@@ -49,3 +55,14 @@ def generate_launch_description():
             arguments=['--ros-args', '--log-level', 'INFO']
            ),
     ])
+
+'''
+
+        Node(
+            package='turtlebot_pastry',
+            executable='trafficlight_start',
+            name='trafficlight_startNode',
+            output='screen'
+        ),
+
+'''
