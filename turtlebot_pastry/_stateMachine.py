@@ -59,7 +59,7 @@ class stateMachineNode(Node):
 
         # status variables
         self.changingLane = False
-        self.greenLight = False
+        self.greenLight = True
         self.statusMessage = String()
 
         # publisher for state info

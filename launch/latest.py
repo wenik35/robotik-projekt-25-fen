@@ -33,15 +33,15 @@ def generate_launch_description():
             name='signRecognitionNode',
             output='screen'
         ),
+    ])
+
+'''
+
         Node(
             package='turtlebot_pastry',
             executable='trafficlight_start',
             name='trafficlight_startNode',
             output='screen'
         ),
-    ])
-
-'''
-
 
 '''
