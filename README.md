@@ -13,13 +13,12 @@ cd ~/ros2_ws/src
 
 In den src-Ordner wird dann dieses Repository geclont:
 ```
-git clone https://github.com/ros/ros_tutorials.git -b humble
+git clone https://github.com/wenik35/robotik-projekt-25-fen.git -b humble
 ```
 
 Anschließend müssen noch vom root des Workspaces aus Dependencys installiert werden:
 ```
-cd ..
-rosdep install -i --from-path src --rosdistro humble -y
+rosdep install -i --from-path ./ --rosdistro humble -y
 ```
 
 Nun kann das package gebaut werden (wenn --packages-select weggelassen wird, werden alle Packages im Workspace gebaut):
@@ -90,5 +89,22 @@ Nutzt die Kamera, um in einer Spur zu fahren. Orientiert sich dabei an der recht
 - speed_drive: Geschwindigkeit, mit der der Roboter vorwärts fährt.
 - canny_high: High-Parameter für den Canny-Algorithmus
 - canny-low: Low-Parameter für den Canny-Algorithmus
+
+## signRecognition
+Nutzt die Kamera um Schilder zu erkennen
+### Publisher
+
+- sign_seen: Gibt erkanntest Schild als Integerwert zurück
+  - 0: Parkplatz
+  - 1: Geradeaus fahren
+  - 2: Links abbiegen
+  - 3: Rechts abbiegen
+  - 4: Zebrastreifen
+
+### Parameter
+
+- lower_bound: Untergrenze Blauton in HSV
+- upper_bound: Obergrenze Blauton in HSV
+- scalar: Skalierungsfaktor
 
 </details>

@@ -17,8 +17,14 @@ def generate_launch_description():
         ),
         Node(
             package='turtlebot_pastry',
-            executable='detectObstacle',
-            name='detectObstacle',
+            executable='imageProcessing',
+            name='imageProcessing',
+            output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='changeLaneAtObstacle',
+            name='changeLaneAtObstacle',
             output='screen'
         ),
         Node(
@@ -26,5 +32,26 @@ def generate_launch_description():
             executable='followPath',
             name='followPath',
             output='screen'
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='signRecognition',
+            name='signRecognition',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='parking',
+            name='parking',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
+        ),
+        Node(
+            package='turtlebot_pastry',
+            executable='crossing',
+            name='crossing',
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
     ])
