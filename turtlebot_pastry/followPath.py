@@ -20,7 +20,7 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('speed_drive', 0.15)
+        self.declare_parameter('speed_drive', 0.12)
         self.declare_parameter('canny_high', 300)
         self.declare_parameter('canny_low', 200)
         self.declare_parameter('threshold', 60)
@@ -43,8 +43,8 @@ class followPathNode(rclpy.node.Node):
             qos_profile=qos_policy)
         self.subscription  # prevent unused variable warning
 
-        self.last_left = collections.deque(maxlen=10)
-        self.last_right = collections.deque(maxlen=10)
+        self.last_left = collections.deque(maxlen=5)
+        self.last_right = collections.deque(maxlen=5)
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Twist, 'follow_path_cmd', 1)
@@ -225,6 +225,7 @@ def filter_lines(lines):
                     # check if intersection is in correct distance and lines are similarly angled
                     if 22 < distance < 28 and angle_diff < 5:
                         result.append(line)
+                        result.append(data2[0])
     
     result = np.unique(np.array(result), axis=0)
     return result
@@ -305,16 +306,17 @@ def average(self, image, lines):
         self.last_right.append(right_avg)
     
     middle_line = []
+    offset = 235
     if len(left_line) == len(right_line) == 0:
         pass
     elif len(left_line) == 0:
         middle_line = right_line.copy()
-        middle_line[0] -= 220
-        middle_line[2] -= 220
+        middle_line[0] -= offset
+        middle_line[2] -= offset
     elif len(right_line) == 0:
         middle_line = left_line.copy()
-        middle_line[0] += 220
-        middle_line[2] += 220
+        middle_line[0] += offset
+        middle_line[2] += offset
     else :
         middle_line = np.average([right_line, left_line], axis=0)
 

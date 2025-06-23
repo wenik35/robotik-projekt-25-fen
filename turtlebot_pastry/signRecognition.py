@@ -97,11 +97,11 @@ class SignRecognitionNode(rclpy.node.Node):
     def scanner_callback(self, data):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
-        cv2.imshow("IMG", self.img_cv)
+        #cv2.imshow("IMG", self.img_cv)
 
     def timer_callback(self):
 
-        #print(self.img_cv)
+        ##print(self.img_cv)
 
         lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
         lower_bound = np.array(lower_bound, dtype = "uint8")
@@ -139,41 +139,41 @@ class SignRecognitionNode(rclpy.node.Node):
             crop_right = img_width
 
             for i in range(img_height):
-                #print(i)
+                ##print(i)
                 if(np.max(mask[i]) > 0):
                     crop_up = i
                     break
 
             for i in range(img_height-1, -1, -1):
-                #print(i)
+                ##print(i)
                 if(np.max(mask[i]) > 0):
                     crop_down = i
                     break
 
             for i in range(img_width):
-                #print(i)
+                ##print(i)
                 if(np.max(mask[:,i]) > 0):
                     crop_left = i
                     break
 
             for i in range(img_width-1, -1, -1):
-                #print(i)
-                #print(len(mask[0]))
+                ##print(i)
+                ##print(len(mask[0]))
                 if(np.max(mask[:,i]) > 0):
                     crop_right = i
                     break
 
-            print("crop_up: ", crop_up)
-            print("crop_down: ", crop_down)
-            print("crop_left: ", crop_left)
-            print("crop_right: ", crop_right)
+            #print("crop_up: ", crop_up)
+            #print("crop_down: ", crop_down)
+            #print("crop_left: ", crop_left)
+            #print("crop_right: ", crop_right)
 
             buffer = 50
             crop_mask = mask[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
             precise_crop = crop_img[max(crop_up-buffer, 0) : min(crop_down, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
 
-            cv2.imshow("MASK", mask)
-            cv2.imshow("PRECISECROP", precise_crop)
+            #cv2.imshow("MASK", mask)
+            #cv2.imshow("PRECISECROP", precise_crop)
 
             img_width = precise_crop.shape[1]
             img_height = precise_crop.shape[0]
@@ -195,26 +195,26 @@ class SignRecognitionNode(rclpy.node.Node):
             crop_right = img_width
 
             for i in range(img_height):
-                #print(i)
+                ##print(i)
                 if(np.max(mask2[i]) > 0):
                     crop_up = i
                     break
 
             for i in range(img_height-1, -1, -1):
-                #print(i)
+                ##print(i)
                 if(np.max(mask2[i]) > 0):
                     crop_down = i
                     break
 
             for i in range(img_width):
-                #print(i)
+                ##print(i)
                 if(np.max(mask2[:,i]) > 0):
                     crop_left = i
                     break
 
             for i in range(img_width-1, -1, -1):
-                #print(i)
-                #print(len(mask2[0]))
+                ##print(i)
+                ##print(len(mask2[0]))
                 if(np.max(mask2[:,i]) > 0):
                     crop_right = i
                     break
@@ -222,7 +222,7 @@ class SignRecognitionNode(rclpy.node.Node):
             buffer = 10
             crop_mask = mask2[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
             precise_crop = precise_crop[max(crop_up-buffer, 0) : min(crop_down + buffer, img_height), max(crop_left - buffer, 0) : min(crop_right + buffer, img_width)]
-            cv2.imshow("MASK2", mask2)
+            #cv2.imshow("MASK2", mask2)
 
             if crop_mask.shape[0] > 0 and crop_mask.shape[1] > 0:
                 precise_crop = cv2.resize(precise_crop, (100, 100))
@@ -244,18 +244,18 @@ class SignRecognitionNode(rclpy.node.Node):
                     msg = Int64()
                     msg.data = int(i)
                     self.publisher_.publish(msg)
-                    print(i)
+                    #print(i)
 
-                print(scores)
+                #print(scores)
 
-                cv2.imshow("Edged", edged)
+                #cv2.imshow("Edged", edged)
 
-                cv2.imshow("CROPMASK", crop_mask)
-                cv2.imshow("PRECISECROP2", precise_crop)
+                #cv2.imshow("CROPMASK", crop_mask)
+                #cv2.imshow("PRECISECROP2", precise_crop)
 
-        cv2.imshow("CROP", crop_img)
+        #cv2.imshow("CROP", crop_img)
 
-        cv2.imshow("Resize", cv2.cvtColor(img_resize, cv2.COLOR_HSV2BGR))
+        #cv2.imshow("Resize", cv2.cvtColor(img_resize, cv2.COLOR_HSV2BGR))
         cv2.waitKey(1)
 
 def main(args=None):

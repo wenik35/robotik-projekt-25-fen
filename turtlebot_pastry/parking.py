@@ -179,7 +179,7 @@ class parkingNode(rclpy.node.Node):
         filtered_parking_lines_img = cv2.addWeighted(parking_bay_roi_color, 0.8, display_filtered_parking_lines, 1, 10)
 
         combined_parking = np.concatenate((parking_lines_img, filtered_parking_lines_img), axis=0)
-        cv2.imshow("parking", combined_parking)
+        #cv2.imshow("parking", combined_parking)
         if len(filtered_parking_lines) > 0:
             if self.status == "Active":
                 self.status = "Searching"
@@ -188,7 +188,7 @@ class parkingNode(rclpy.node.Node):
                 self.line_timer = self.create_timer(timer_period, self.timer_callback)
                 self.lineNo += 1
 
-        cv2.waitKey(1)
+        #cv2.waitKey(1)
 
 def filter_parking(lines):
     result = []

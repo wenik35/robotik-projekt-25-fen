@@ -30,7 +30,7 @@ class TrafficlightStartNode(rclpy.node.Node):
         self.subscription = self.create_subscription(
             CompressedImage,
             '/image_raw/compressed',
-            self.scanner_callback,
+            self.cam_callback,
             qos_profile=qos_policy)
         self.subscription  # prevent unused variable warning
 
@@ -38,8 +38,9 @@ class TrafficlightStartNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Bool, 'GreenLight', 1)
         self.active = True
 
-    def scanner_callback(self, data):
+    def cam_callback(self, data):
         if self.active:
+            print("TrafficlightStartNode: active")
             lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value
             lower_bound = np.array(lower_bound, dtype = "uint8")
             upper_bound = self.get_parameter('upper_bound').get_parameter_value().integer_array_value

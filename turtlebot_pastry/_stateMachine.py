@@ -13,7 +13,7 @@ class stateMachineNode(Node):
         super().__init__('stateMachineNode')
 
         # parameters
-        self.declare_parameter('force_stop', True)
+        self.declare_parameter('force_stop', False)
 
         # setup laserscanner subscription
         qos_policy = rclpy.qos.QoSProfile(
@@ -59,7 +59,7 @@ class stateMachineNode(Node):
 
         # status variables
         self.changingLane = False
-        self.greenLight = True
+        self.greenLight = False
         self.statusMessage = String()
 
         # publisher for state info
