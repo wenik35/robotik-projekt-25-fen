@@ -26,6 +26,32 @@ class crossingNode(rclpy.node.Node):
             'line_brightness' : 245,
         }
 
+        width = 640
+        height = 480
+        new_width = 1280
+        new_height = 960
+
+        v = 480.0
+
+        K = np.array([[v, 0.0, width / 2],
+                      [0.0, v, height / 2],
+                      [0.0, 0.0, 1.0]])
+        D = np.array([[-0.3], [0.1], [0.0], [0.0]])
+
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K,
+                                                                       D,
+                                                                       (width, height),
+                                                                       np.eye(3),
+                                                                       balance = 1,
+                                                                       new_size = (new_width, new_height),
+                                                                       fov_scale = 1.4)
+        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K,
+                                                                   D,
+                                                                   np.eye(3),
+                                                                   new_K,
+                                                                   ((new_width, new_height)),
+                                                                   cv2.CV_16SC2)
+
         for param_name, default_value in self.params.items():
             self.declare_parameter(param_name, default_value)
 

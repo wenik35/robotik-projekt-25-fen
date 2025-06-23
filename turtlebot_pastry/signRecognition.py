@@ -115,15 +115,6 @@ class SignRecognitionNode(rclpy.node.Node):
 
         self.image_list = image_list
         self.lastSign = -1
-        self.notice_publisher = self.create_publisher(Bool, 'crossing_in_process', qos_profile=qos_policy)
-        self.crossing_status = Bool()
-        self.parking = Bool()
-        self.command_publisher = self.create_publisher(Twist, 'crossing_cmd', qos_profile=qos_policy)
-        self.status_publisher = self.create_publisher(String, 'crossing_status', qos_profile=qos_policy)
-        self.status_status = String()
-        self.status_timer = self.create_timer(1, self.status_callback)
-        self.status = "Paused"
-        self.direction = 2
         self.signBuffer = CyclicBuffer(5)
 
     def parameter_callback(self, params):
