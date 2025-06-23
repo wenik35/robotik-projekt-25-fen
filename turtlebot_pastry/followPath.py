@@ -45,6 +45,7 @@ class followPathNode(rclpy.node.Node):
 
         self.last_left = collections.deque(maxlen=5)
         self.last_right = collections.deque(maxlen=5)
+        self.last_middle = collections.deque(maxlen=5)
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Twist, 'follow_path_cmd', 1)
@@ -96,7 +97,7 @@ class followPathNode(rclpy.node.Node):
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
         # filter out line the do not belong to lanes
-        filtered_lines = filter_lines(lines)
+        filtered_lines = filter_lines(self, lines)
         display_filtered_lines = display_lines(edged2color, filtered_lines, (255, 0, 0))
         lanes = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
@@ -116,7 +117,6 @@ class followPathNode(rclpy.node.Node):
         cv2.waitKey(1)
 
         return calculate_steering(middle, edged.shape[1])
-
 
 
 def get_birds_eye_view(image):
@@ -143,19 +143,6 @@ def get_birds_eye_view(image):
 
     return cut_warped
 
-def filter_parking(lines):
-    result = []
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line
-            if (not x1 == x2) and (not y1 == y2):
-                slope, y_int = np.polyfit((x1, x2), (y1, y2), 1)
-                if -1 < slope < 0:
-                    result.append(line)
-
-    return np.array(result)
-
-
 def remove_image_edges(image):
     height, width = image.shape[:2]
     left_area = np.array([[0, 130], [0, 205], [150, height], [190, height]], np.int32)
@@ -172,28 +159,44 @@ def unpack_lines(lines):
             unpacked.append(line[0])
     return unpacked
 
-def filter_lines(lines):
+def correct_line(line):
+    x1, y1, x2, y2 = line
+
+    # correct for vertical lines
+    if x1 == x2:
+        x1, x2 = x1 - 1, x2 + 1
+    if y1 == y2:
+        y1, y2 = y1 - 1, y2 + 1
+
+    return (x1, y1, x2, y2)
+
+def filter_lines(self, lines):
     result = []
-    start = time.time_ns()
     if lines is not None:
 
         line_data = []
 
         for line in lines:
-            x1, y1, x2, y2 = line
-
-            # correct for vertical lines
-            if x1 == x2:
-                x1, x2 = x1 - 1, x2 + 1
-            if y1 == y2:
-                y1, y2 = y1 - 1, y2 + 1
-
-            angle = line_angle(line)
+            # correct line to avoid division by zero
+            line = correct_line(line)
 
             # filter out lines that are too flat
+            angle = line_angle(line)
             if angle < 45:
                 continue
 
+            # filter out lines that deviate too much from the last few cached lines
+            '''
+            if len(self.last_middle) > 0:
+                last_avg = np.average(self.last_middle, axis=0)
+                last_avg_angle = line_angle(last_avg)
+                print("Angle: ", angle, "Last avg angle: ", last_avg_angle)
+                if abs(angle - last_avg_angle) > 45:
+                    continue
+            '''
+
+            # calculate linear function
+            x1, y1, x2, y2  = line
             slope = (y2-y1) / (x2-x1)
             y_int = y1 - slope * x1
 
@@ -263,50 +266,42 @@ def display_lines(image, lines, color=None):
     return lines_image
     
 def average(self, image, lines):
-    #TODO: optimise, polyfit takes long
     left = []
     right = []
     height, width = image.shape[:2]
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line
-            if (not x1 == x2) and (not y1 == y2):
-                parameters = np.polyfit((x1, x2), (y1, y2), 1)
-                slope = parameters[0]
-                y_int = parameters[1]
-                middle = get_middle_point(line)
 
-                if middle[0] < width//2:
-                    left.append((slope, y_int))
-                else:
-                    right.append((slope, y_int))
+    if lines is None:
+        return [], [], []
 
+    for line in lines:
+        middle = get_middle_point(line)
+
+        if middle[0] < width//2:
+            left.append(line)
+        else:
+            right.append(line)
 
     left_line = []
     if len(left) > 0:
-        left_avg = np.average(left, axis=0)
+        left_line = np.average(left, axis=0)
 
         if len(self.last_left) > 0:
             last_avg = np.average(self.last_left, axis=0)
-            left_avg = np.average([left_avg, last_avg], axis=0)
-        
-        left_line = make_points(image, left_avg)
-        self.last_left.append(left_avg)
+            left_line = np.average([left_line, last_avg], axis=0)
+        self.last_left.append(left_line)
    
 
     right_line = []
     if len(right) > 0:
-        right_avg = np.average(right, axis=0)
+        right_line = np.average(right, axis=0)
 
         if len(self.last_right) > 0:
             last_avg = np.average(self.last_right, axis=0)
-            right_avg = np.average([right_avg, last_avg], axis=0)
-        
-        right_line = make_points(image, right_avg)
-        self.last_right.append(right_avg)
+            right_line = np.average([right_line, last_avg], axis=0)
+        self.last_right.append(right_line)
     
     middle_line = []
-    offset = 235
+    offset = 200
     if len(left_line) == len(right_line) == 0:
         pass
     elif len(left_line) == 0:
@@ -320,28 +315,19 @@ def average(self, image, lines):
     else :
         middle_line = np.average([right_line, left_line], axis=0)
 
-    return left_line, right_line, middle_line
+    if len(middle_line) > 0:
+        self.last_middle.append(middle_line)
 
-def make_points(image, line):
-    slope, y_int = line
-    if not (abs(slope) < 0.00001):
-        y1 = image.shape[0]
-        y2 = 0
-        x1 = int((y1 - y_int) // slope)
-        x2 = int((y2 - y_int) // slope)
-        return [x1, y1, x2, y2]
-    else:
-        return []
+    return left_line, right_line, middle_line
 
 def line_angle(line):
     x1, y1, x2, y2 = line
     dx = x2 - x1
     dy = y2 - y1
-    vector = np.array([dx, dy])
 
-    return vector_angle(vector, np.array([1, 0]))
+    v1 = np.array([dx, dy])
+    v2 = np.array([1, 0])
 
-def vector_angle(v1, v2):
     unit_v1 = v1 / np.linalg.norm(v1)
     unit_v2 = v2 / np.linalg.norm(v2)
 
