@@ -274,7 +274,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
             pcg = cv2.cvtColor(cv2.resize(precise_crop, (100, 100)), cv2.COLOR_BGR2GRAY)
             #cv2.imshow("GGG", pcg)
-            pcg = cv2.inRange(self.brightBalance(pcg), 130, 255)
+            pcg = cv2.inRange(self.brightBalance(pcg), 120, 255)
             cv2.imshow("HHH", pcg)
             print(pcg.shape)
 
@@ -296,7 +296,7 @@ class SignRecognitionNode(rclpy.node.Node):
             sign_int = -1
         else:
             best = np.argmax(scores)    #find best match
-            if scores[best] > 0.44:
+            if scores[best] > 0.50:
                 sign_int = best
             else:
                 sign_int = self.lastSign
