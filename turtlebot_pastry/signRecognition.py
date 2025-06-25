@@ -14,8 +14,6 @@ from std_msgs.msg import Int64, String, Bool
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
 from geometry_msgs.msg import Twist
 
-
-
 class SignRecognitionNode(rclpy.node.Node):
 
     class SignType(Enum):
@@ -98,10 +96,10 @@ class SignRecognitionNode(rclpy.node.Node):
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
-        image_list.append(cv2.resize(cv2.imread("./Media/Parking2.png"), (100, 100)))
-        image_list.append(cv2.resize(cv2.imread("./Media/GoStraight2.png"), (100, 100)))
-        image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft2.png"), (100, 100)))
-        image_list.append(cv2.resize(cv2.imread("./Media/TurnRight2.png"), (100, 100)))
+        image_list.append(cv2.resize(cv2.imread("./Media/Parking.png"), (71, 92)))
+        image_list.append(cv2.resize(cv2.imread("./Media/GoStraight.png"), (50, 85)))
+        image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft.png"), (65, 85)))
+        image_list.append(cv2.resize(cv2.imread("./Media/TurnRight.png"), (71, 95)))
 
         for i in range(0, len(image_list)):
             image_list[i] = cv2.cvtColor(image_list[i], cv2.COLOR_BGR2GRAY)
@@ -112,6 +110,7 @@ class SignRecognitionNode(rclpy.node.Node):
             factor = exp_grey / avg_grey
             image_list[i] *= factor
             image_list[i] = np.clip(image_list[i], 0, 255).astype(np.uint8)
+            cv2.imshow(str(i), image_list[i])
 
         self.image_list = image_list
         self.lastSign = -1
@@ -132,7 +131,6 @@ class SignRecognitionNode(rclpy.node.Node):
         # convert message to opencv image
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-
 
     def whiteBalance(self, img):
         exp_grey = 120
@@ -189,7 +187,8 @@ class SignRecognitionNode(rclpy.node.Node):
                          self.map2,
                          interpolation = cv2.INTER_LINEAR,
                          borderMode = cv2.BORDER_CONSTANT)
-        #cv2.imshow("Noo", temp)
+        tempBW = cv2.inRange(cv2.cvtColor(temp, cv2.COLOR_BGR2GRAY), 130, 255)
+        cv2.imshow("Noo", tempBW)
 
         img_v = temp.copy()
         cv2.rectangle(img_v, (crop_L, crop_B), (crop_R, crop_T), (0, 240, 0), 2)
@@ -267,6 +266,7 @@ class SignRecognitionNode(rclpy.node.Node):
             precise_crop = crop_img[top_right[1] : bottom_left[1], bottom_left[0] : top_right[0]]
             max_b = np.max(precise_crop)
             precise_crop = ((precise_crop.astype(np.float32) / np.float32(max_b)) * 255.0).astype(np.uint8) # TODO check if this is actually beneficial
+            crop_img = cv2.resize(crop_img, (img_width * 2, img_height * 2))
 
             cv2.rectangle(img_v, (crop_L + bottom_left[0], crop_T + bottom_left[1]), (crop_L + top_right[0], crop_T + top_right[1]), (0, 0, 240), 2)
 
@@ -274,17 +274,22 @@ class SignRecognitionNode(rclpy.node.Node):
 
             pcg = cv2.cvtColor(cv2.resize(precise_crop, (100, 100)), cv2.COLOR_BGR2GRAY)
             #cv2.imshow("GGG", pcg)
-            pcg = self.brightBalance(pcg)
-            #cv2.imshow("HHH", pcg)
+            pcg = cv2.inRange(self.brightBalance(pcg), 130, 255)
+            cv2.imshow("HHH", pcg)
+            print(pcg.shape)
 
             #compare to test images
             for i in self.image_list:
-                scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
-                #_, max_val, _, _ = cv2.minMaxLoc(cv2.matchTemplate(pcg, i, cv2.TM_SQDIFF_NORMED))
-                #scores.append(max_val)
+                #scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
+                _, max_val, bl, tr = cv2.minMaxLoc(cv2.matchTemplate(i, pcg, cv2.TM_CCOEFF_NORMED))
+                cv2.rectangle(crop_img, ( bl[0], bl[1]), (tr[0], tr[1]), (250, 0, 0), 2)
+                print(bl)
+                print(tr)
+                scores.append(max_val)
+            cv2.imshow("RRR", crop_img);
 
         scores = np.array(scores)
-        #self.get_logger().info(str(scores))
+        self.get_logger().info(str(scores))
         signInfo = ""
 
         if scores.size == 0:
