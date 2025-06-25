@@ -75,6 +75,7 @@ class stateMachineNode(Node):
         self.parking = False
         self.crossing = False
         self.greenLight = True
+        self.drivingRight = True
         self.statusMessage = String()
         self.get_logger().info("State machine node initialized")
 
@@ -84,19 +85,19 @@ class stateMachineNode(Node):
         # publisher for driving commands
         self.cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        self.overright_publisher = self.create_publisher(Bool, 'overright', qos_policy)
+        self.overwright_publisher = self.create_publisher(Bool, 'overwright', qos_policy)
 
-    def activate_overright(self):
+    def activate_overwright(self):
         self.driving_overwrite = True
         msg = Bool()
         msg.data = True
-        self.overright_publisher.publish(msg)
+        self.overwright_publisher.publish(msg)
 
-    def deactivate_overright(self):
+    def deactivate_overwright(self):
         self.driving_overwrite = False
         msg = Bool()
         msg.data = False
-        self.overright_publisher.publish(msg)
+        self.overwright_publisher.publish(msg)
 
     def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
@@ -110,14 +111,19 @@ class stateMachineNode(Node):
         self.status.publish(self.statusMessage)
 
     def lane_change_notice_callback(self, msg):
-        if not self.driving_overwrite or self.changingLane:
+        if not self.driving_overwrite or self.changingLane or not self.drivingRight:
             self.changingLane = msg.data
 
             #announce status
             self.statusMessage.data = "Changing lane" if msg.data else "Driving in lane"
             self.status.publish(self.statusMessage)
-            if self.changingLane: self.activate_overright()
-            else: self.deactivate_overright()
+            if self.changingLane:
+                self.driving_overwrite = True
+                if self.drivingRight:
+                    self.activate_overwright()
+                self.drivingRight = not self.drivingRight
+            elif self.drivingRight: self.deactivate_overwright()
+            else: self.driving_overwrite = False
 
     def lane_changer_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
@@ -132,8 +138,8 @@ class stateMachineNode(Node):
             #announce status
             self.statusMessage.data = "Parking" if msg.data else "Driving in lane"
             self.status.publish(self.statusMessage)
-            if self.parking: self.activate_overright()
-            else: self.deactivate_overright()
+            if self.parking: self.activate_overwright()
+            else: self.deactivate_overwright()
 
     def parking_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
@@ -148,8 +154,8 @@ class stateMachineNode(Node):
             #announce status
             self.statusMessage.data = "Crossing" if msg.data else "Driving in lane"
             self.status.publish(self.statusMessage)
-            if self.crossing: self.activate_overright()
-            else: self.deactivate_overright()
+            if self.crossing: self.activate_overwright()
+            else: self.deactivate_overwright()
 
     def crossing_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value

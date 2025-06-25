@@ -88,6 +88,13 @@ class crossingNode(rclpy.node.Node):
             qos_profile=qos_policy)
         self.subscription  # prevent unused variable warning
 
+        self.overwriteSubscribtion = self.create_subscription(
+            Bool,
+            'overwright',
+            self.overwriteCallback,
+            qos_profile=qos_policy)
+
+
         self.notice_publisher = self.create_publisher(Bool, 'crossing_in_process', qos_profile=qos_policy)
         self.crossing_status = Bool()
         self.parking = Bool()
@@ -109,6 +116,16 @@ class crossingNode(rclpy.node.Node):
                 succ = False
         return SetParametersResult(successful = succ)
 
+    def overwriteCallback(self, msg):
+        if msg.data and not self.status == "Crossing":
+
+            self.last_status = self.status
+            self.status = "Overwriten"
+
+        if not msg.data and self.status == "Overwriten":
+            self.status = "Paused"
+
+
     def status_callback(self):
         self.status_status.data = self.status
         self.status_publisher.publish(self.status_status)
@@ -122,14 +139,6 @@ class crossingNode(rclpy.node.Node):
             self.status_callback()
             self.direction = data.data
 
-            #self.status = "Crossing"
-            #self.crossing()
-        """
-        if self.status == "Paused":
-            self.get_logger().info("SIGN FOUND!")
-            self.status = "Active"
-            self.status_callback()
-"""
     def scanner_callback(self, data):
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
@@ -148,12 +157,15 @@ class crossingNode(rclpy.node.Node):
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
         #cv2.line(gsimg, [500, 700], [800, 700], (255,0,0), 2)
         cv2.imshow("JJ", gsimg)
-        self.get_logger().info(str(brightness))
+        #self.get_logger().info(str(brightness))
         if self.status == "Active" and brightness > line_brightness:
             self.get_logger().info("LINE FOUND")
             self.status = "Crossing"
             self.status_callback()
             self.crossing()
+
+        cv2.waitKey(1)
+
 
     def crossing(self):
         self.crossing_status.data = True

@@ -23,18 +23,6 @@ def generate_launch_description():
         ),
         Node(
             package='turtlebot_pastry',
-            executable='parking',
-            name='parkingNode',
-            output='screen'
-        ),
-        Node(
-            package='turtlebot_pastry',
-            executable='signRecognition',
-            name='signRecognitionNode',
-            output='screen'
-        ),
-        Node(
-            package='turtlebot_pastry',
             executable='signRecognition',
             name='signRecognition',
             output='screen',

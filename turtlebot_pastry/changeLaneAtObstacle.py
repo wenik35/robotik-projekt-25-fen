@@ -45,6 +45,13 @@ class changeLaneNode(Node):
             self.parking_notice_callback,
             qos_profile=qos_policy)
 
+
+        self.overwriteSubscribtion = self.create_subscription(
+            Bool,
+            'overwright',
+            self.overwriteCallback,
+            qos_profile=qos_policy)
+
         # publisher for driving commands
         self.notice_publisher = self.create_publisher(Bool, 'lane_change_in_process', qos_profile=qos_policy)
         self.laneChange = Bool()
@@ -55,6 +62,22 @@ class changeLaneNode(Node):
         self.status = "Driving right"
         self.lastDistanceRight = 0.0
         self.last_path_cmd = Twist()
+        self.status_timer = self.create_timer(1, self.status_callback)
+
+    def status_callback(self):
+        self.get_logger().info(self.status)
+
+    def overwriteCallback(self, msg):
+
+        self.get_logger().info("Status before overwright: " + self.status)
+        if msg.data and not(self.status == "Changing Lane" or self.status == "Driving Left"):
+
+            self.last_status = self.status
+            #self.status = "Overwriten"
+
+        if not msg.data and self.status == "Overwriten":
+            self.status = self.last_status
+
 
     def scanner_callback(self, msg):
         # caching the parameters for clarity
