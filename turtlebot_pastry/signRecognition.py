@@ -2,17 +2,14 @@ import cv2
 import numpy as np
 import rclpy
 import rclpy.node
-from time import sleep
 
 from collections import Counter
 from cv_bridge import CvBridge
 from enum import Enum
 from rcl_interfaces.msg import SetParametersResult
 from sensor_msgs.msg import CompressedImage
-from skimage.metrics import structural_similarity
-from std_msgs.msg import Int64, String, Bool
+from std_msgs.msg import Int64
 from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
-from geometry_msgs.msg import Twist
 
 class SignRecognitionNode(rclpy.node.Node):
 
@@ -41,7 +38,7 @@ class SignRecognitionNode(rclpy.node.Node):
             'crop_L' : 800,
             'crop_R' : 1100,
             'crop_B' : 450,
-            'crop_T' : 310,
+            'crop_T' : 300,
         }
 
         width = 640
@@ -114,7 +111,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         self.image_list = image_list
         self.lastSign = -1
-        self.signBuffer = CyclicBuffer(5)
+        self.signBuffer = CyclicBuffer(3)
 
     def parameter_callback(self, params):
         succ = True
@@ -204,7 +201,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         # convert to binary
         mask = cv2.inRange(cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV), lower_bound, upper_bound)
-        img_v[820 :  820 + mask.shape[0], 490 : 490 + mask.shape[1]] = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        img_v[810 :  810 + mask.shape[0], 490 : 490 + mask.shape[1]] = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
         #cv2.imshow("M0", mask)
 
@@ -214,7 +211,7 @@ class SignRecognitionNode(rclpy.node.Node):
         nz_cols = (maskR != 0).sum(axis=0) == 1         # cols with exactly one non-black pixel
         singleton  = (maskR != 0) & (nz_rows[:, None] | nz_cols[None, :])
         maskR[singleton] = 0
-        maskR = cv2.resize(maskR, (img_width, img_height), interpolation=cv2.INTER_NEAREST)
+        maskR = cv2.resize(maskR, (img_width, img_height), interpolation = cv2.INTER_NEAREST)
 
         sensitivity = 120
         min_area = 900
@@ -285,7 +282,7 @@ class SignRecognitionNode(rclpy.node.Node):
             #cv2.imshow("RRR", crop_img);
 
         scores = np.array(scores)
-        self.get_logger().info(str(scores))
+        #self.get_logger().info(str(scores))
         signInfo = ""
 
         if scores.size == 0:
