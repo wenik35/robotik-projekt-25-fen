@@ -95,6 +95,9 @@ class changeLaneNode(Node):
 
                 self.changeLane(toLeft=True)
 
+                self.laneChange.data = False
+                self.notice_publisher.publish(self.laneChange)
+
         if self.status == "Driving left":
             if (self.lastDistanceRight < 0.6):
                 distance_d = msg.ranges[540] - self.lastDistanceRight
@@ -110,6 +113,9 @@ class changeLaneNode(Node):
                     self.notice_publisher.publish(self.laneChange)
 
                     self.changeLane(toLeft=False)
+
+                    self.laneChange.data = False
+                    self.notice_publisher.publish(self.laneChange)
 
         self.lastDistanceRight = msg.ranges[540]
 
