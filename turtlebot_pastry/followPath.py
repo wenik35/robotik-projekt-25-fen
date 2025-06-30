@@ -20,7 +20,7 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('speed_drive', 0.12)
+        self.declare_parameter('speed_drive', 0.08)
         self.declare_parameter('canny_high', 300)
         self.declare_parameter('canny_low', 200)
         self.declare_parameter('threshold', 60)
@@ -51,8 +51,8 @@ class followPathNode(rclpy.node.Node):
 
         # create timer to periodically invoke the driving logic
         #timer_period = 0.1  # seconds
-        #self.my_timer = self.create_timer(timer_period, self.timer_callback)    
-    
+        #self.my_timer = self.create_timer(timer_period, self.timer_callback)
+
     # handling received image data
     def cam_callback(self, data):
         steering = self.analyse_image(data)
@@ -67,7 +67,7 @@ class followPathNode(rclpy.node.Node):
 
             # send message
             self.publisher_.publish(msg)
-    
+
     def analyse_image(self, image):
         canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
         canny_high = self.get_parameter('canny_high').get_parameter_value().integer_value
@@ -160,7 +160,7 @@ def remove_image_edges(image):
     height, width = image.shape[:2]
     left_area = np.array([[0, 130], [0, 205], [150, height], [190, height]], np.int32)
     right_area = np.array([[width, 70], [width, 100], [740, height], [755, height]], np.int32)
-    
+
     mask = cv2.fillPoly(image, [left_area, right_area], 0)
     return mask
 
@@ -217,7 +217,7 @@ def filter_lines(lines):
                 if (slope1 != slope2) and (abs(slope2 - norm_slope) > 0.0001):  # avoid division by zero
                     x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
                     y = int(norm_slope * x + norm_y_int)
-                    
+
                     distance = np.linalg.norm([x - middle[0], y - middle[1]])
 
                     angle_diff = abs(data[2] - data2[2])
@@ -226,7 +226,7 @@ def filter_lines(lines):
                     if 22 < distance < 28 and angle_diff < 5:
                         result.append(line)
                         result.append(data2[0])
-    
+
     result = np.unique(np.array(result), axis=0)
     return result
 
@@ -238,13 +238,13 @@ def calculate_steering(middle_line, image_width):
         return 0.0
     else:
         angle = line_angle(middle_line) - 90
-        
+
         offset = image_width // 2 - get_middle_point(middle_line)[0]
 
         return (angle + offset) / 20
 
 def get_middle_point(line):
-    x1, y1, x2, y2 = line 
+    x1, y1, x2, y2 = line
     x_middle = (x1 + x2) // 2
     y_middle = (y1 + y2) // 2
     return (x_middle, y_middle)
@@ -257,11 +257,11 @@ def display_lines(image, lines, color=None):
             if (len(line) > 0):
                 if random_color:
                     color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
-                x1, y1, x2, y2 = line 
+                x1, y1, x2, y2 = line
                 cv2.line(lines_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
 
     return lines_image
-    
+
 def average(self, image, lines):
     #TODO: optimise, polyfit takes long
     left = []
@@ -289,10 +289,10 @@ def average(self, image, lines):
         if len(self.last_left) > 0:
             last_avg = np.average(self.last_left, axis=0)
             left_avg = np.average([left_avg, last_avg], axis=0)
-        
+
         left_line = make_points(image, left_avg)
         self.last_left.append(left_avg)
-   
+
 
     right_line = []
     if len(right) > 0:
@@ -301,10 +301,10 @@ def average(self, image, lines):
         if len(self.last_right) > 0:
             last_avg = np.average(self.last_right, axis=0)
             right_avg = np.average([right_avg, last_avg], axis=0)
-        
+
         right_line = make_points(image, right_avg)
         self.last_right.append(right_avg)
-    
+
     middle_line = []
     offset = 235
     if len(left_line) == len(right_line) == 0:
@@ -347,7 +347,7 @@ def vector_angle(v1, v2):
 
     angle = np.arccos(np.clip(np.dot(unit_v1, unit_v2), -1.0, 1.0))
     return np.rad2deg(angle)
-    
+
 
 def main(args=None):
     spinUntilKeyboardInterrupt(args, followPathNode)
