@@ -18,7 +18,7 @@ class parkingNode(rclpy.node.Node):
         super().__init__('parkingNode')
 
         self.declare_parameter('detection_distance', 0.30)
-        self.declare_parameter('deadreconing_time', 3.0)
+        self.declare_parameter('deadreconing_time', 3.14159265356)
 
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
@@ -88,11 +88,19 @@ class parkingNode(rclpy.node.Node):
             self.lineNo = 0
 
     def scanner_callback(self, data):
+
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
 
-            self.get_logger().info("Disance: " + str(min(data.ranges[500:580])))
-            space_detection = data.ranges[540] > 0.39 and data.ranges[500] > 0.41 and data.ranges[580] > 0.41 and data.ranges[610] > 0.25 and data.ranges[470] > 0.25 and data.ranges[630] > 0.19 and data.ranges[450] > 0.19
+
+            self.get_logger().info("Disantce540: " + str(data.ranges[540]))
+            self.get_logger().info("Disantce510: " + str(data.ranges[510]))
+            self.get_logger().info("Disantce580: " + str(data.ranges[580]))
+            self.get_logger().info("Disantce610: " + str(data.ranges[610]))
+            self.get_logger().info("Disantce470: " + str(data.ranges[470]))
+            self.get_logger().info("Disantce630: " + str(data.ranges[630]))
+            self.get_logger().info("Disantce450: " + str(data.ranges[450]))
+            space_detection = data.ranges[540] > 0.39 and data.ranges[510] > 0.40 and data.ranges[580] > 0.41 and data.ranges[610] > 0.25 and data.ranges[470] > 0.2 and data.ranges[630] > 0.19 and data.ranges[450] > 0.19
             if space_detection:
                 self.status = "Parking"
                 self.parking.data = True

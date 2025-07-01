@@ -74,7 +74,7 @@ class stateMachineNode(Node):
         self.changingLane = False
         self.parking = False
         self.crossing = False
-        self.greenLight = True
+        self.greenLight = False
         self.drivingRight = True
         self.statusMessage = String()
 
@@ -101,7 +101,7 @@ class stateMachineNode(Node):
     def lane_follower_callback(self, msg):
         forbid_driving = self.get_parameter('force_stop').get_parameter_value().bool_value
 
-        if not self.driving_overwrite and self.greenLight and (not forbid_driving):
+        if (not self.driving_overwrite) and self.greenLight and (not forbid_driving):
             self.cmd_vel.publish(msg)
 
     def trafficlight_callback(self, msg):

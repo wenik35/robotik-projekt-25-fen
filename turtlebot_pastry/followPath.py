@@ -241,7 +241,7 @@ def calculate_steering(middle_line, image_width):
 
         offset = image_width // 2 - get_middle_point(middle_line)[0]
 
-        return (angle + offset) / 20
+        return (angle + offset) / 25
 
 def get_middle_point(line):
     x1, y1, x2, y2 = line
