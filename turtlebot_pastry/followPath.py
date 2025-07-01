@@ -20,7 +20,7 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('speed_drive', 0.08)
+        self.declare_parameter('speed_drive', 0.1)
         self.declare_parameter('canny_high', 300)
         self.declare_parameter('canny_low', 200)
         self.declare_parameter('threshold', 60)

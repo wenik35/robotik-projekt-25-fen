@@ -304,7 +304,7 @@ class SignRecognitionNode(rclpy.node.Node):
             signInfo = str(sign.name) + " " + str(100 * scores[sign_int])[:5] + "%"
 
         if most_common_sign != self.lastSign:
-        #if True:
+            #if True:
             #self.lastSign = most_common_sign
             msg = Int64()
             msg.data = int(most_common_sign)
