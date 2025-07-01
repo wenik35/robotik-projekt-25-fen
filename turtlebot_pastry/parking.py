@@ -90,7 +90,8 @@ class parkingNode(rclpy.node.Node):
     def scanner_callback(self, data):
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
-            space_detection = min(data.ranges[500:580]) < detection_distance
+            space_detection = min(data.ranges[500:580]) > detection_distance
+            self.get_logger().info("Disance: " + str(min(data.ranges[500:580])))
             if space_detection:
                 self.status = "Parking"
                 self.parking.data = True
@@ -103,6 +104,7 @@ class parkingNode(rclpy.node.Node):
     def timer_callback(self):
         self.get_logger().info("TIMER " + self.status + " " + str(self.lineNo))
         if self.status == "Searching" and 4 > self.lineNo > 0:
+            self.status = "Scanning"
             self.lineNo += 1
             #self.last_call += 1
 
@@ -197,6 +199,7 @@ class parkingNode(rclpy.node.Node):
         #cv2.imshow("parking", combined_parking)
         if len(filtered_parking_lines) > 0:
             if self.status == "Active":
+                self.get_logger().info("LINE FOUND!")
                 self.status = "Searching"
                 timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
                 #self.line_timer.cancel()
