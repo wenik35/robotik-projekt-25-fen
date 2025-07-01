@@ -90,7 +90,7 @@ class parkingNode(rclpy.node.Node):
     def scanner_callback(self, data):
         if self.status == "Scanning":
             detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
-            space_detection = min(data.ranges[500:580]) < detection_distance
+            space_detection = data.ranges[540] > 0.39 and data.ranges[500] > 0.41 and data.ranges[580] > 0.41 and data.ranges[610] > 0.25 and data.ranges[470] > 0.25 and data.ranges[630] > 0.19 and data.ranges[450] > 0.19
             if space_detection:
                 self.status = "Parking"
                 self.parking.data = True
