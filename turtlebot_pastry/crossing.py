@@ -205,7 +205,7 @@ class crossingNode(rclpy.node.Node):
         twist.linear.x = 0.2
         twist.angular.z = 0.0
         self.command_publisher.publish(twist)
-        sleep(time)
+        sleep(time - 0.2)
 
     def TurnRight(self):
         time = self.get_parameter('right_time').get_parameter_value().double_value

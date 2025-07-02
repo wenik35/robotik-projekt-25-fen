@@ -84,7 +84,7 @@ class parkingNode(rclpy.node.Node):
 
             if not msg.data and self.status == "Overwriten":
                 self.status = "Paused"
-                if self.lineNo > 0
+                if self.lineNo > 0:
                     self.line_timer.cancel()
                     self.lineNo = 0
 
