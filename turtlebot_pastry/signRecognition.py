@@ -284,7 +284,7 @@ class SignRecognitionNode(rclpy.node.Node):
                 cv2.rectangle(crop_img, ( bl[0], bl[1]), (tr[0], tr[1]), (250, 0, 0), 2)
                 scores.append(max_val)
         else:
-            self.get_logger().info("XX");
+            # self.get_logger().info("XX");
             for i in self.image_list:
                 #scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
                 _, max_val, bl, tr = cv2.minMaxLoc(cv2.matchTemplate(i, crop_bw, cv2.TM_CCOEFF_NORMED))
