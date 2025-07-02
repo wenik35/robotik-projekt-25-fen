@@ -33,7 +33,7 @@ class SignRecognitionNode(rclpy.node.Node):
 
         self.params = {
             'lower_bound' : [98,80,65],
-            'upper_bound' : [111,230,142],
+            'upper_bound' : [115,230,142],
             'scalar' : 8,
             'crop_L' : 800,
             'crop_R' : 1100,
@@ -89,7 +89,7 @@ class SignRecognitionNode(rclpy.node.Node):
         self.publisher_ = self.create_publisher(Int64, 'sign_seen', 1)
 
         # create timer to periodically invoke the driving logic
-        timer_period = 0.05  # seconds
+        timer_period = 0.04  # seconds
         self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
         image_list = []
@@ -97,6 +97,7 @@ class SignRecognitionNode(rclpy.node.Node):
         image_list.append(cv2.resize(cv2.imread("./Media/GoStraight.png"), (50, 85)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnLeft.png"), (65, 85)))
         image_list.append(cv2.resize(cv2.imread("./Media/TurnRight.png"), (49, 61)))
+        image_list.append(cv2.resize(cv2.imread("./Media/TurnRightB.png"), (100, 100)))
 
         for i in range(0, len(image_list)):
             image_list[i] = cv2.cvtColor(image_list[i], cv2.COLOR_BGR2GRAY)
@@ -184,7 +185,7 @@ class SignRecognitionNode(rclpy.node.Node):
                          self.map2,
                          interpolation = cv2.INTER_LINEAR,
                          borderMode = cv2.BORDER_CONSTANT)
-        tempBW = cv2.inRange(cv2.cvtColor(temp, cv2.COLOR_BGR2GRAY), 130, 255)
+        #tempBW = cv2.inRange(cv2.cvtColor(temp, cv2.COLOR_BGR2GRAY), 130, 255)
         #cv2.imshow("Noo", tempBW)
 
         img_v = temp.copy()
@@ -193,13 +194,16 @@ class SignRecognitionNode(rclpy.node.Node):
         # cropping image
         crop_img = temp[:, crop_L:crop_R] # TODO: Optimize cropping
         crop_img = crop_img[crop_T:crop_B]
+
+        crop_bw = cv2.inRange(cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY), 130, 255)
+
         #crop_img = self.whiteBalance(crop_img)
         #cv2.imshow("C", crop_img)
 
         img_width = crop_img.shape[1]
         img_height = crop_img.shape[0]
 
-        # convert to binary
+        # convert to binarycrop_img
         mask = cv2.inRange(cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV), lower_bound, upper_bound)
         img_v[810 :  810 + mask.shape[0], 490 : 490 + mask.shape[1]] = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
@@ -270,7 +274,7 @@ class SignRecognitionNode(rclpy.node.Node):
             #cv2.imshow("I", precise_crop)
 
             pcg = cv2.cvtColor(cv2.resize(precise_crop, (100, 100)), cv2.COLOR_BGR2GRAY)
-            pcg = cv2.inRange(self.brightBalance(pcg), 120, 255)
+            pcg = cv2.inRange(self.brightBalance(pcg), 130, 255)
             img_v[0: 0 + pcg.shape[0], 800 : 800 + pcg.shape[1]] = cv2.cvtColor(pcg, cv2.COLOR_GRAY2BGR)
 
             #compare to test images
@@ -279,16 +283,28 @@ class SignRecognitionNode(rclpy.node.Node):
                 _, max_val, bl, tr = cv2.minMaxLoc(cv2.matchTemplate(i, pcg, cv2.TM_CCOEFF_NORMED))
                 cv2.rectangle(crop_img, ( bl[0], bl[1]), (tr[0], tr[1]), (250, 0, 0), 2)
                 scores.append(max_val)
+        else:
+            self.get_logger().info("XX");
+            for i in self.image_list:
+                #scores.append(structural_similarity(i, pcg, gaussian_weights=True, multichannel=False))
+                _, max_val, bl, tr = cv2.minMaxLoc(cv2.matchTemplate(i, crop_bw, cv2.TM_CCOEFF_NORMED))
+                #cv2.rectangle(crop_img, ( bl[0], bl[1]), (tr[0], tr[1]), (250, 0, 0), 2)
+                if(max_val > 0.7):
+                    scores.append(max_val)
             #cv2.imshow("RRR", crop_img);
 
         scores = np.array(scores)
-        #self.get_logger().info(str(scores))
+
+        if(scores[4] > scores[3]):
+            scores[3] = scores[4]
+        scores = scores[:3]
+        self.get_logger().info(str(scores))
         signInfo = ""
 
         if scores.size == 0:
             sign_int = -1
         else:
-            best = np.argmax(scores)    #find best match
+            best = np.argmax(scores)
             if scores[best] > 0.70:
                 sign_int = best
             else:
