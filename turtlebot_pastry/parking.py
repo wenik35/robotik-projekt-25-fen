@@ -90,7 +90,8 @@ class parkingNode(rclpy.node.Node):
 
 
     def status_callback(self):
-        self.get_logger().info(self.status)
+        #self.get_logger().info(self.status)
+        pass
 
     def sign_callback(self, data):
         if data.data == 0 and self.status == "Paused":

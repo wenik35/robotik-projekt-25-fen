@@ -104,6 +104,8 @@ class crossingNode(rclpy.node.Node):
         self.status_timer = self.create_timer(1, self.status_callback)
         self.status = "Paused"
         self.direction = 2
+        self.onStart = True
+        self.invert = False
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
         #
     def parameter_callback(self, params):
@@ -129,7 +131,7 @@ class crossingNode(rclpy.node.Node):
     def status_callback(self):
         self.status_status.data = self.status
         self.status_publisher.publish(self.status_status)
-        self.get_logger().info(self.status)
+        #self.get_logger().info(self.status)
 
     def sign_callback(self, data):
         self.get_logger().info(str(data.data))
@@ -142,7 +144,7 @@ class crossingNode(rclpy.node.Node):
     def scanner_callback(self, data):
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
         #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-        line_brightness = 160
+        line_brightness = 170
         gsimg =self.img_cv
         gsimg = cv2.remap(gsimg,
                          self.map1,
@@ -153,7 +155,12 @@ class crossingNode(rclpy.node.Node):
         #cv2.imshow("Noo", temp)
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_BGR2GRAY)
         gsimg = gsimg[730 : 760, 500 : 800]
+        gsimg = (255-gsimg) if self.invert else gsimg
         brightness = np.mean(gsimg)
+        if self.onStart and brightness > 100:
+            self.onStart = False
+            self.invert =True
+            print("Inverted")
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
         #cv2.line(gsimg, [500, 700], [800, 700], (255,0,0), 2)
         cv2.imshow("JJ", gsimg)

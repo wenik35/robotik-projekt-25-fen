@@ -80,6 +80,7 @@ class changeLaneNode(Node):
 
 
     def scanner_callback(self, msg):
+        #print("480", msg.ranges[480], "540", msg.ranges[540], "630", msg.ranges[630])
         # caching the parameters for clarity
         detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
 
@@ -99,25 +100,24 @@ class changeLaneNode(Node):
                 self.notice_publisher.publish(self.laneChange)
 
         if self.status == "Driving left":
-            if (self.lastDistanceRight < 0.6):
-                distance_d = msg.ranges[540] - self.lastDistanceRight
-                right_detection = 0.4 < distance_d
+            detections = msg.ranges[500:700]
+            self.get_logger().info("min " + str(min(detections)))
+            switchback = True
 
-                # let robot drive forward for a bit to get in front of obstacle
-                sleep(1)
+            for i in range(len(detections)):
+                if detections[i] < 0.42:
+                    switchback = False
+                    break
 
-                # message
-                if (right_detection):
-                    self.status = "Changing lane"
-                    self.laneChange.data = True
-                    self.notice_publisher.publish(self.laneChange)
+            if switchback:
+                self.status = "Changing lane"
+                self.laneChange.data = True
+                self.notice_publisher.publish(self.laneChange)
 
-                    self.changeLane(toLeft=False)
+                self.changeLane(toLeft=False)
 
-                    self.laneChange.data = False
-                    self.notice_publisher.publish(self.laneChange)
-
-        self.lastDistanceRight = msg.ranges[540]
+                self.laneChange.data = False
+                self.notice_publisher.publish(self.laneChange)
 
     def follow_line_callback(self, msg):
         self.last_path_cmd = msg
