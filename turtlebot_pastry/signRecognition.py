@@ -295,15 +295,15 @@ class SignRecognitionNode(rclpy.node.Node):
 
         scores = np.array(scores)
 
-        if(scores[4] > scores[3]):
-            scores[3] = scores[4]
-        scores = scores[:3]
-        self.get_logger().info(str(scores))
+        #self.get_logger().info(str(scores))
         signInfo = ""
 
         if scores.size == 0:
             sign_int = -1
         else:
+            if(scores[4] > scores[3]):
+                scores[3] = scores[4]
+            scores = scores[:3]
             best = np.argmax(scores)
             if scores[best] > 0.70:
                 sign_int = best
