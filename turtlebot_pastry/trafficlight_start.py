@@ -39,6 +39,10 @@ class TrafficlightStartNode(rclpy.node.Node):
         self.active = True
         print("TrafficlightStartNode: active")
 
+        out = Bool()
+        out.data = False
+        self.publisher_.publish(out)
+
     def cam_callback(self, data):
         if self.active:
             lower_bound = self.get_parameter('lower_bound').get_parameter_value().integer_array_value

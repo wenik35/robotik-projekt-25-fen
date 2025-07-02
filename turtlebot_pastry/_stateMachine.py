@@ -74,7 +74,7 @@ class stateMachineNode(Node):
         self.changingLane = False
         self.parking = False
         self.crossing = False
-        self.greenLight = False
+        self.greenLight = True
         self.drivingRight = True
         self.statusMessage = String()
 

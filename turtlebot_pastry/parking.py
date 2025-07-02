@@ -61,6 +61,13 @@ class parkingNode(rclpy.node.Node):
             self.cam_callback,
             qos_profile=qos_policy)
 
+
+        self.overwriteSubscribtion = self.create_subscription(
+            Bool,
+            'overwright',
+            self.overwriteCallback,
+            qos_profile=qos_policy)
+
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
         self.parking = Bool()
         self.command_publisher = self.create_publisher(Twist, 'parking_cmd', qos_profile=qos_policy)
@@ -77,6 +84,10 @@ class parkingNode(rclpy.node.Node):
 
             if not msg.data and self.status == "Overwriten":
                 self.status = "Paused"
+                if self.lineNo > 0
+                    self.line_timer.cancel()
+                    self.lineNo = 0
+
 
     def status_callback(self):
         self.get_logger().info(self.status)
@@ -120,6 +131,7 @@ class parkingNode(rclpy.node.Node):
         elif self.lineNo == 4:
             self.lineNo = 0
             self.status = "Paused"
+            self.line_timer.cancel()
 
 
     def follow_line_callback(self, msg):
