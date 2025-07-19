@@ -99,7 +99,6 @@ class crossingNode(rclpy.node.Node):
         self.crossing_status = Bool()
         self.parking = Bool()
         self.command_publisher = self.create_publisher(Twist, 'crossing_cmd', qos_profile=qos_policy)
-        self.status_publisher = self.create_publisher(String, 'crossing_status', qos_profile=qos_policy)
         self.status_status = String()
         self.status_timer = self.create_timer(1, self.status_callback)
         self.status = "Paused"
@@ -129,9 +128,7 @@ class crossingNode(rclpy.node.Node):
 
 
     def status_callback(self):
-        self.status_status.data = self.status
-        self.status_publisher.publish(self.status_status)
-        #self.get_logger().info(self.status)
+        pass
 
     def sign_callback(self, data):
         self.get_logger().info(str(data.data))

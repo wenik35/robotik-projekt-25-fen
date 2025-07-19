@@ -17,7 +17,6 @@ class parkingNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('parkingNode')
 
-        self.declare_parameter('detection_distance', 0.30)
         self.declare_parameter('deadreconing_time', 3.14159265356)
 
         self.declare_parameter('canny_high', 400)
@@ -102,7 +101,6 @@ class parkingNode(rclpy.node.Node):
     def scanner_callback(self, data):
 
         if self.status == "Scanning":
-            detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
 
 
             self.get_logger().info("Disantce540: " + str(data.ranges[540]))

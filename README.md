@@ -1,6 +1,10 @@
+# Turtlebot Pastry
+
 "turtlebot_pastry" (PArtial Self TRYving) ist ein Package für ROS2 Humble, mit dem ein turtlebot einen Straßenparkour bewältigen soll. Der Turtlebot (Modell Hamburger) ist mit LIDAR-Scanner auf dem Kopf und einer 640p Kamera ausgestattet. Der Parkour enthält unter anderem Straßenzüge, Hindernisse, Ampeln und Kreuzungen bewältigen können. Näheres zu den Anforderungen ist in den Milestones festgehalten.
 
 ---
+
+## Installation
 
 Um dieses Package laufen zu lassen, benötigt man erst ein Ubuntu 22.04 System, auf dem [ROS2 Humble Hawksbill installiert]("https://docs.ros.org/en/humble/Installation.html") ist.
 
@@ -46,42 +50,40 @@ Im folgenden sind alle Nodes dieses Packages und ihre Funktion kurz aufgelistet:
 
 <details>
 <summary>Node-Dokumentation</summary>
-<h2>stateMachine</h2>
+
+# Node-Dokumentation
+
+## stateMachine
 Master-Node, die die Daten aller anderen Nodes managet und Fahrbefehle an den Roboter weiterleitet.
-<h4>Publisher</h4>
 
-* status: Gibt State-Updates als String aus
-* cmd_vel: Fahrbefehle für den Roboter
-
-<h4>Parameter</h4>
-
-* force_stop: Verhindert, dass der Roboter fährt
+### Publisher
+- status: Gibt State-Updates als String aus
+- cmd_vel: Fahrbefehle für den Roboter
+- overwright: Boolean der Befehlnodes unterbricht und zurücksetzt
 
 
-<h2>detectObstacle</h2>
+### Parameter
+- force_stop: Verhindert, dass der Roboter fährt
+
+
+## changeLaneAtObstacle
 Nutzt den Laserscanner, um Hindernisse vor dem Roboter zu erkennen.
-<h4>Publisher</h4>
 
-- obstacle_in_path: Gibt einen entsprechenden Boolean aus, wenn ein Hindernis auftaucht oder entfernt wird
+### Publisher
+- lane_change_in_process: Gibt einen entsprechenden Boolean aus, wenn ein Hindernis auftaucht und die Spur gewechselt wird
+- change_lane: Fahrbefehle zum Spurwechsel
 
-<h4>Parameter</h4>
-
+### Parameter
 - detection_distance: Distanz, ab der ein Objekt erkannt werden soll
 
 
-<h2>followPath</h2>
+## followPath
 Nutzt die Kamera, um in einer Spur zu fahren. Orientiert sich dabei an der rechten Begrenzungslinie.
-<h4>Publisher</h4>
 
+### Publisher
 - follow_path_cmd: Fahrbefehle zur Vorwärtsbewegung innerhalb der Fahrbahn
-<h4>Parameter</h4>
 
-        self.declare_parameter('max_line_offset', 300)
-        self.declare_parameter('steering_quotient', 10)
-        self.declare_parameter('line_expected_at', 550)
-        self.declare_parameter('speed_drive', 0.15)
-        self.declare_parameter('canny_high', 600)
-        self.declare_parameter('canny_low', 150)
+### Parameter
 
 - max_line_offset: Maximale Distanz in Pixeln, die die erkannte Linie von ihrer erwarteten Position abweichen darf.
 - steering_quotient: Kleinere Werte lassen den Roboter schneller lenken.
@@ -106,5 +108,42 @@ Nutzt die Kamera um Schilder zu erkennen
 - lower_bound: Untergrenze Blauton in HSV
 - upper_bound: Obergrenze Blauton in HSV
 - scalar: Skalierungsfaktor
+
+## parking
+Parkt den Roboter in der ersten lehren Parklücke (max. 3)
+
+### Publisher
+
+- parking_in_progress: Booleanwert ob der Roboter parkbereit ist
+- parking_cmd: Fahrbefehle zum einparken
+
+### Parameter
+
+- followPath Parameter für die Parklinienerkennung
+- deadreconing_time: Fahrzeit zwischen Parklücken
+
+## crossing
+Navigiert Kreuzung
+
+### Publisher
+- crossing_in_progress: Booleanwert ob der Roboter die Kreuzung überquert
+- crossing_cmd: Fahrbefehle zum überqueren der Kreuzung
+
+### Parameter
+- left_time: Fahrzeit für das Linksabbiegen
+- straight_time: Fahrzeit für das geradeaus fahren
+- right_time: Fahrzeit für das Rechtsabbiegen
+- line_brightness: Helligkeitsschwellenwert für die Haltelinie
+
+## trafficlight_start
+Erkennt das grüne Licht der Ampel
+
+### Publisher
+- GreenLight: Boolean ob grüne Ampel erkant wurde
+
+### Parameter
+- lower_bound / upper_bound: Ober- und Untergrenze für grünes Licht
+
+
 
 </details>

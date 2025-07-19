@@ -15,7 +15,7 @@ class TrafficlightStartNode(rclpy.node.Node):
     def __init__(self):
         super().__init__('TrafficlightStartNode')
 
-        self.declare_parameter('lower_bound',[55,90,0]) # TODO: figure out boundaries [10,180,135]
+        self.declare_parameter('lower_bound',[55,90,0])
         self.declare_parameter('upper_bound',[65,100,15])
 
         # init openCV-bridge
