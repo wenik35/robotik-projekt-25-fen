@@ -23,7 +23,7 @@ class CrossingNode(rclpy.node.Node):
             'left_time' : 3.9,
             'straight_time' : 3.8,
             'right_time' : 2.2,
-            'line_brightness' : 245,
+            'line_brightness' : 170,
         }
 
         width = 640
@@ -132,6 +132,8 @@ class CrossingNode(rclpy.node.Node):
 
     def sign_callback(self, data):
         self.get_logger().info(str(data.data))
+
+        # Check if received sign is junction sign
         if 0 < data.data < 4 and self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
@@ -140,8 +142,10 @@ class CrossingNode(rclpy.node.Node):
 
     def scanner_callback(self, data):
         self.img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
-        #line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
-        line_brightness = 170
+
+        line_brightness = self.get_parameter('line_brightness').get_parameter_value().integer_value
+
+        # Processing image for line detection
         gsimg =self.img_cv
         gsimg = cv2.remap(gsimg,
                          self.map1,
@@ -149,19 +153,24 @@ class CrossingNode(rclpy.node.Node):
                          interpolation = cv2.INTER_LINEAR,
                          borderMode = cv2.BORDER_CONSTANT)
 
-        #cv2.imshow("Noo", temp)
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_BGR2GRAY)
         gsimg = gsimg[730 : 760, 500 : 800]
         gsimg = (255-gsimg) if self.invert else gsimg
         brightness = np.mean(gsimg)
-        if self.on_start and brightness > 100:
-            self.on_start = False
+
+        # correct for underground colour
+        if self.onStart and brightness > 100:
             self.invert =True
             print("Inverted")
+
+        self.onStart = False
+
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
         #cv2.line(gsimg, [500, 700], [800, 700], (255,0,0), 2)
         cv2.imshow("JJ", gsimg)
         #self.get_logger().info(str(brightness))
+
+        # Checking line brightness
         if self.status == "Active" and brightness > line_brightness:
             self.get_logger().info("LINE FOUND")
             self.status = "Crossing"
@@ -175,6 +184,8 @@ class CrossingNode(rclpy.node.Node):
         self.crossing_status.data = True
         self.notice_publisher.publish(self.crossing_status)
         print(self.direction)
+
+        # Crossing junktion based on seen sign
         match self.direction:
             case 1:
                 self.go_straight()

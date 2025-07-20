@@ -59,6 +59,7 @@ class TrafficlightStartNode(rclpy.node.Node):
             # find green
             mask = cv2.inRange(crop_img, lower_bound, upper_bound)
 
+            # check for white pixels
             if np.amax(mask) > 0:
                 out = Bool()
                 out.data = True
