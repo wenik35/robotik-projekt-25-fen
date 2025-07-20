@@ -2,15 +2,15 @@
 
 "turtlebot_pastry" (PArtial Self TRYving) ist ein Package für ROS2 Humble, mit dem ein turtlebot einen Straßenparkour bewältigen soll. Der Turtlebot (Modell Hamburger) ist mit LIDAR-Scanner auf dem Kopf und einer 640p Kamera ausgestattet. Der Parkour enthält unter anderem Straßenzüge, Hindernisse, Ampeln und Kreuzungen.
 
-Näheres zu den Anforderungen ist in den [Milestones]("https://github.com/wenik35/robotik-projekt-25-fen/milestones?state=closed") festgehalten.
+Näheres zu den Anforderungen ist in den [Milestones](https://github.com/wenik35/robotik-projekt-25-fen/milestones?state=closed) festgehalten.
 
-Eine genauere Erklärung aller Nodes ist im [Wiki]("https://github.com/wenik35/robotik-projekt-25-fen/wiki") zu finden.
+Eine genauere Erklärung aller Nodes ist im [Wiki](https://github.com/wenik35/robotik-projekt-25-fen/wiki) zu finden.
 
 ---
 
 ## Installation
 
-Um dieses Package laufen zu lassen, benötigt man erst ein Ubuntu 22.04 System, auf dem [ROS2 Humble Hawksbill installiert]("https://docs.ros.org/en/humble/Installation.html") ist.
+Um dieses Package laufen zu lassen, benötigt man erst ein Ubuntu 22.04 System, auf dem [ROS2 Humble Hawksbill installiert](https://docs.ros.org/en/humble/Installation.html) ist.
 
 Zuerst muss ein Workspace angelegt und das Projekt geclont werden:
 ```
