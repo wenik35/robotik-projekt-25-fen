@@ -10,20 +10,20 @@ from std_msgs.msg import Int64, String, Bool
 from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from turtlebot_pastry._stop_driving import spin_until_keyboard_interrupt
 
-class parkingNode(rclpy.node.Node):
+class ParkingNode(rclpy.node.Node):
 
     def __init__(self):
-        super().__init__('parkingNode')
+        super().__init__('parking')
 
         self.declare_parameter('deadreconing_time', 3.14159265356)
 
         self.declare_parameter('canny_high', 400)
         self.declare_parameter('canny_low', 150)
         self.declare_parameter('threshold', 60)
-        self.declare_parameter('minLineLength', 20)
-        self.declare_parameter('maxLineGap', 10)
+        self.declare_parameter('min_line_length', 20)
+        self.declare_parameter('max_line_gap', 10)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -61,10 +61,10 @@ class parkingNode(rclpy.node.Node):
             qos_profile=qos_policy)
 
 
-        self.overwriteSubscribtion = self.create_subscription(
+        self.override_subscribtion = self.create_subscription(
             Bool,
-            'overwright',
-            self.overwriteCallback,
+            'override',
+            self.override_callback,
             qos_profile=qos_policy)
 
         self.notice_publisher = self.create_publisher(Bool, 'parking_in_process', qos_profile=qos_policy)
@@ -72,20 +72,20 @@ class parkingNode(rclpy.node.Node):
         self.command_publisher = self.create_publisher(Twist, 'parking_cmd', qos_profile=qos_policy)
 
         self.status = "Paused"
-        self.lineNo = 0
+        self.line_no = 0
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
 
         self.status_timer = self.create_timer(1, self.status_callback)
 
-    def overwriteCallback(self, msg):
+    def override_callback(self, msg):
             if msg.data and not self.status == "Parking":
-                self.status = "Overwriten"
+                self.status = "Overridden"
 
-            if not msg.data and self.status == "Overwriten":
+            if not msg.data and self.status == "Overridden":
                 self.status = "Paused"
-                if self.lineNo > 0:
+                if self.line_no > 0:
                     self.line_timer.cancel()
-                    self.lineNo = 0
+                    self.line_no = 0
 
 
     def status_callback(self):
@@ -96,7 +96,7 @@ class parkingNode(rclpy.node.Node):
         if data.data == 0 and self.status == "Paused":
             self.get_logger().info("SIGN FOUND!")
             self.status = "Active"
-            self.lineNo = 0
+            self.line_no = 0
 
     def scanner_callback(self, data):
 
@@ -121,14 +121,14 @@ class parkingNode(rclpy.node.Node):
                 self.status = "Searching"
 
     def timer_callback(self):
-        self.get_logger().info("TIMER " + self.status + " " + str(self.lineNo))
-        if self.status == "Searching" and 4 > self.lineNo > 0:
+        self.get_logger().info("TIMER " + self.status + " " + str(self.line_no))
+        if self.status == "Searching" and 4 > self.line_no > 0:
             self.status = "Scanning"
-            self.lineNo += 1
+            self.line_no += 1
             #self.last_call += 1
 
-        elif self.lineNo == 4:
-            self.lineNo = 0
+        elif self.line_no == 4:
+            self.line_no = 0
             self.status = "Paused"
             self.line_timer.cancel()
 
@@ -139,7 +139,7 @@ class parkingNode(rclpy.node.Node):
     def park(self):
         self.line_timer.cancel()
         self.get_logger().info("PARKING")
-        self.turn90Deg(False)
+        self.turn_90_deg(False)
 
         # drive forward
         twist = Twist()
@@ -147,16 +147,16 @@ class parkingNode(rclpy.node.Node):
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(True)
+        self.turn_90_deg(True)
         self.stop()
         sleep(11)
-        self.turn90Deg(True)
+        self.turn_90_deg(True)
 
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(1.5)
 
-        self.turn90Deg(False)
+        self.turn_90_deg(False)
         self.parking.data = False
         self.notice_publisher.publish(self.parking)
 
@@ -164,7 +164,7 @@ class parkingNode(rclpy.node.Node):
         self.status = "Paused"
 
 
-    def turn90Deg(self, toLeft: bool):
+    def turn_90_deg(self, toLeft: bool):
         cached_cmd = self.last_path_cmd
 
         twist = Twist()
@@ -189,8 +189,8 @@ class parkingNode(rclpy.node.Node):
         canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
 
         threshold = self.get_parameter('threshold').get_parameter_value().integer_value
-        minLineLength = self.get_parameter('minLineLength').get_parameter_value().integer_value
-        maxLineGap = self.get_parameter('maxLineGap').get_parameter_value().integer_value
+        min_line_length = self.get_parameter('min_line_length').get_parameter_value().integer_value
+        max_line_gap = self.get_parameter('max_line_gap').get_parameter_value().integer_value
 
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
@@ -205,7 +205,7 @@ class parkingNode(rclpy.node.Node):
         edged = cv2.Canny(cut_img, canny_low, canny_high)
 
         # detect parking bay
-        parking_lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        parking_lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, min_line_length=min_line_length, max_line_gap=max_line_gap))
         parking_bay_roi_color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
         display_parking_lines = display_lines(parking_bay_roi_color, parking_lines)
@@ -224,7 +224,7 @@ class parkingNode(rclpy.node.Node):
                 timer_period = self.get_parameter('deadreconing_time').get_parameter_value().double_value  # seconds
                 #self.line_timer.cancel()
                 self.line_timer = self.create_timer(timer_period, self.timer_callback)
-                self.lineNo += 1
+                self.line_no += 1
 
         #cv2.waitKey(1)
 
@@ -267,7 +267,7 @@ def display_lines(image, lines, color=None):
     return lines_image
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, parkingNode)
+    spin_until_keyboard_interrupt(args, ParkingNode)
 
 if __name__ == '__main__':
     main()

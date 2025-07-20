@@ -21,16 +21,15 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'stateMachine = turtlebot_pastry._stateMachine:main',
-            'stop = turtlebot_pastry._stop:main',
-            'changeLaneAtObstacle = turtlebot_pastry.changeLaneAtObstacle:main',
-            'followPath = turtlebot_pastry.followPath:main',
+            'state_machine = turtlebot_pastry._state_machine:main',
+            'stop = turtlebot_pastry._stop_driving:main',
+            'change_lane = turtlebot_pastry.change_lane:main',
+            'follow_path = turtlebot_pastry.follow_path:main',
             'trafficlight_start = turtlebot_pastry.trafficlight_start:main',
-            'signRecognition = turtlebot_pastry.signRecognition:main',
-            'changeLane = turtlebot_pastry.changeLane:main',
+            'sign_recognition = turtlebot_pastry.sign_recognition:main',
+            'change_lane = turtlebot_pastry.change_lane:main',
             'parking = turtlebot_pastry.parking:main',
             'crossing = turtlebot_pastry.crossing:main',
-
         ],
     },
 )

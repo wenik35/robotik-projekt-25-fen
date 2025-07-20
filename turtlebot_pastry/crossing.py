@@ -11,13 +11,13 @@ from sensor_msgs.msg import CompressedImage, LaserScan
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from rcl_interfaces.msg import SetParametersResult
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from turtlebot_pastry._stop_driving import spin_until_keyboard_interrupt
 from venv import create
 
-class crossingNode(rclpy.node.Node):
+class CrossingNode(rclpy.node.Node):
 
     def __init__(self):
-        super().__init__('crossingNode')
+        super().__init__('crossing')
 
         self.params = {
             'left_time' : 3.9,
@@ -74,24 +74,24 @@ class crossingNode(rclpy.node.Node):
         # create subscribers for image data with changed qos
         self.add_on_set_parameters_callback(self.parameter_callback)
 
-        self.signSubscription = self.create_subscription(
+        self.sign_sub = self.create_subscription(
             Int64,
             'sign_seen',
             self.sign_callback,
             qos_profile=qos_policy)
-        self.signSubscription  # prevent unused variable warning
+        self.sign_sub  # prevent unused variable warning
 
-        self.subscription = self.create_subscription(
+        self.image_sub = self.create_subscription(
             CompressedImage,
             '/image_raw/compressed',
             self.scanner_callback,
             qos_profile=qos_policy)
-        self.subscription  # prevent unused variable warning
+        self.image_sub  # prevent unused variable warning
 
-        self.overwriteSubscribtion = self.create_subscription(
+        self.override_sub = self.create_subscription(
             Bool,
-            'overwright',
-            self.overwriteCallback,
+            'override',
+            self.override_callback,
             qos_profile=qos_policy)
 
 
@@ -103,7 +103,7 @@ class crossingNode(rclpy.node.Node):
         self.status_timer = self.create_timer(1, self.status_callback)
         self.status = "Paused"
         self.direction = 2
-        self.onStart = True
+        self.on_start = True
         self.invert = False
         #self.line_timer = self.create_timer(2000000000, self.timer_callback)
         #
@@ -117,13 +117,13 @@ class crossingNode(rclpy.node.Node):
                 succ = False
         return SetParametersResult(successful = succ)
 
-    def overwriteCallback(self, msg):
+    def override_callback(self, msg):
         if msg.data and not self.status == "Crossing":
 
             self.last_status = self.status
-            self.status = "Overwriten"
+            self.status = "Overridden"
 
-        if not msg.data and self.status == "Overwriten":
+        if not msg.data and self.status == "Overridden":
             self.status = "Paused"
 
 
@@ -154,8 +154,8 @@ class crossingNode(rclpy.node.Node):
         gsimg = gsimg[730 : 760, 500 : 800]
         gsimg = (255-gsimg) if self.invert else gsimg
         brightness = np.mean(gsimg)
-        if self.onStart and brightness > 100:
-            self.onStart = False
+        if self.on_start and brightness > 100:
+            self.on_start = False
             self.invert =True
             print("Inverted")
         gsimg = cv2.cvtColor(gsimg, cv2.COLOR_GRAY2BGR)
@@ -177,11 +177,11 @@ class crossingNode(rclpy.node.Node):
         print(self.direction)
         match self.direction:
             case 1:
-                self.GoStraight()
+                self.go_straight()
             case 2:
-                self.TurnLeft()
+                self.turn_left()
             case 3:
-                self.TurnRight()
+                self.turn_right()
 
         self.status = "Paused"
         self.status_callback()
@@ -189,38 +189,42 @@ class crossingNode(rclpy.node.Node):
         self.crossing_status.data = False
         self.notice_publisher.publish(self.crossing_status)
 
-    def GoStraight(self):
+    def go_straight(self):
         time = self.get_parameter('straight_time').get_parameter_value().double_value
         twist = Twist()
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(time)
 
-    def TurnLeft(self):
+    def turn_left(self):
         time = self.get_parameter('left_time').get_parameter_value().double_value
         twist = Twist()
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(time)
+
         twist.linear.x = 0.0
         twist.angular.z = 1.0
         self.command_publisher.publish(twist)
         sleep(1.7)
+
         twist.linear.x = 0.2
         twist.angular.z = 0.0
         self.command_publisher.publish(twist)
         sleep(time - 0.2)
 
-    def TurnRight(self):
+    def turn_right(self):
         time = self.get_parameter('right_time').get_parameter_value().double_value
         twist = Twist()
         twist.linear.x = 0.2
         self.command_publisher.publish(twist)
         sleep(time)
+
         twist.linear.x = 0.0
         twist.angular.z = -1.0
         self.command_publisher.publish(twist)
         sleep(1.7)
+        
         twist.linear.x = 0.2
         twist.angular.z = 0.0
         self.command_publisher.publish(twist)
@@ -228,7 +232,7 @@ class crossingNode(rclpy.node.Node):
 
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, crossingNode)
+    spin_until_keyboard_interrupt(args, CrossingNode)
 
 if __name__ == '__main__':
     main()

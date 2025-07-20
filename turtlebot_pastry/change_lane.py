@@ -10,12 +10,12 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
 from geometry_msgs.msg import Twist
 
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from turtlebot_pastry._stop_driving import spin_until_keyboard_interrupt
 
-class changeLaneNode(Node):
+class ChangeLaneNode(Node):
     def __init__(self):
         #initialize
-        super().__init__('changeLaneNode')
+        super().__init__('change_lane')
 
         # definition of the parameters that can be changed at runtime
         self.declare_parameter('detection_distance', 0.30)
@@ -46,42 +46,40 @@ class changeLaneNode(Node):
             qos_profile=qos_policy)
 
 
-        self.overwriteSubscribtion = self.create_subscription(
+        self.overrideSubscribtion = self.create_subscription(
             Bool,
-            'overwright',
-            self.overwriteCallback,
+            'override',
+            self.override_callback,
             qos_profile=qos_policy)
 
         # publisher for driving commands
         self.notice_publisher = self.create_publisher(Bool, 'lane_change_in_process', qos_profile=qos_policy)
-        self.laneChange = Bool()
+        self.lane_change = Bool()
 
         self.command_publisher = self.create_publisher(Twist, 'change_lane_cmd', qos_profile=qos_policy)
 
         # status
         self.status = "Driving right"
-        self.lastDistanceRight = 0.0
+        self.last_distance_right = 0.0
         self.last_path_cmd = Twist()
         self.status_timer = self.create_timer(1, self.status_callback)
 
     def status_callback(self):
         self.get_logger().info(self.status)
 
-    def overwriteCallback(self, msg):
+    def override_callback(self, msg):
 
-        self.get_logger().info("Status before overwright: " + self.status)
+        self.get_logger().info("Status before override: " + self.status)
         if msg.data and not(self.status == "Changing Lane" or self.status == "Driving Left"):
 
             self.last_status = self.status
-            #self.status = "Overwriten"
+            #self.status = "Overridden"
 
-        if not msg.data and self.status == "Overwriten":
+        if not msg.data and self.status == "Overridden":
             self.status = self.last_status
 
 
     def scanner_callback(self, msg):
-        #print("480", msg.ranges[480], "540", msg.ranges[540], "630", msg.ranges[630])
-        # caching the parameters for clarity
         detection_distance = self.get_parameter('detection_distance').get_parameter_value().double_value
 
         if self.status == "Driving right":
@@ -91,17 +89,16 @@ class changeLaneNode(Node):
             # message
             if (front_detection):
                 self.status = "Changing lane"
-                self.laneChange.data = True
-                self.notice_publisher.publish(self.laneChange)
+                self.lane_change.data = True
+                self.notice_publisher.publish(self.lane_change)
 
-                self.changeLane(toLeft=True)
+                self.change_lane(toLeft=True)
 
-                self.laneChange.data = False
-                self.notice_publisher.publish(self.laneChange)
+                self.lane_change.data = False
+                self.notice_publisher.publish(self.lane_change)
 
         if self.status == "Driving left":
             detections = msg.ranges[500:700]
-            self.get_logger().info("min " + str(min(detections)))
             switchback = True
 
             for i in range(len(detections)):
@@ -111,19 +108,19 @@ class changeLaneNode(Node):
 
             if switchback:
                 self.status = "Changing lane"
-                self.laneChange.data = True
-                self.notice_publisher.publish(self.laneChange)
+                self.lane_change.data = True
+                self.notice_publisher.publish(self.lane_change)
 
-                self.changeLane(toLeft=False)
+                self.change_lane(toLeft=False)
 
-                self.laneChange.data = False
-                self.notice_publisher.publish(self.laneChange)
+                self.lane_change.data = False
+                self.notice_publisher.publish(self.lane_change)
 
     def follow_line_callback(self, msg):
         self.last_path_cmd = msg
 
-    def changeLane(self, toLeft: bool):
-        self.turn90Deg(toLeft)
+    def change_lane(self, toLeft: bool):
+        self.turn_90_deg(toLeft)
 
         # drive forward
         twist = Twist()
@@ -131,18 +128,18 @@ class changeLaneNode(Node):
         self.command_publisher.publish(twist)
         sleep(1.3)
 
-        self.turn90Deg(not toLeft)
+        self.turn_90_deg(not toLeft)
 
         # give lane detection node time to react
         sleep(0.5)
 
-        self.laneChange.data = False
-        self.notice_publisher.publish(self.laneChange)
+        self.lane_change.data = False
+        self.notice_publisher.publish(self.lane_change)
 
         # stop, give back control to lane follower
         self.status = "Driving left" if toLeft else "Driving right"
 
-    def turn90Deg(self, toLeft: bool):
+    def turn_90_deg(self, toLeft: bool):
         cached_cmd = self.last_path_cmd
 
         twist = Twist()
@@ -163,7 +160,7 @@ class changeLaneNode(Node):
             self.status = "Driving right"
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, changeLaneNode)
+    spin_until_keyboard_interrupt(args, ChangeLaneNode)
 
 if __name__ == '__main__':
     main()

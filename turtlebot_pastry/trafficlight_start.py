@@ -6,14 +6,14 @@ import numpy as np
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from turtlebot_pastry._stop_driving import spin_until_keyboard_interrupt
 
 import array
 
 class TrafficlightStartNode(rclpy.node.Node):
 
     def __init__(self):
-        super().__init__('TrafficlightStartNode')
+        super().__init__('trafficlight_start')
 
         self.declare_parameter('lower_bound',[55,90,0])
         self.declare_parameter('upper_bound',[65,100,15])
@@ -54,7 +54,7 @@ class TrafficlightStartNode(rclpy.node.Node):
             img_cv = self.bridge.compressed_imgmsg_to_cv2(data, desired_encoding = 'passthrough')
 
             # cropping image
-            crop_img = img_cv[50:][150:300][:] # TODO: Optimnize cropping
+            crop_img = img_cv[50:][150:300][:] # TODO: Optimize cropping
 
             # find green
             mask = cv2.inRange(crop_img, lower_bound, upper_bound)
@@ -75,7 +75,7 @@ class TrafficlightStartNode(rclpy.node.Node):
         #cv2.waitKey(1)
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, TrafficlightStartNode)
+    spin_until_keyboard_interrupt(args, TrafficlightStartNode)
 
 
 if __name__ == '__main__':

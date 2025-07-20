@@ -4,7 +4,7 @@ simple line following node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
-from turtlebot_pastry._stop import spinUntilKeyboardInterrupt
+from turtlebot_pastry._stop_driving import spin_until_keyboard_interrupt
 
 import collections
 import rclpy
@@ -20,12 +20,12 @@ class followPathNode(rclpy.node.Node):
         super().__init__('followPathNode')
 
         # definition of the parameters that can be changed at runtime
-        self.declare_parameter('speed_drive', 0.1)
+        self.declare_parameter('speed_drive', 0.12)
         self.declare_parameter('canny_high', 300)
         self.declare_parameter('canny_low', 200)
         self.declare_parameter('threshold', 60)
-        self.declare_parameter('minLineLength', 20)
-        self.declare_parameter('maxLineGap', 3)
+        self.declare_parameter('min_line_length', 20)
+        self.declare_parameter('max_line_gap', 3)
 
         # init openCV-bridge
         self.bridge = CvBridge()
@@ -45,13 +45,10 @@ class followPathNode(rclpy.node.Node):
 
         self.last_left = collections.deque(maxlen=5)
         self.last_right = collections.deque(maxlen=5)
+        self.last_middle = collections.deque(maxlen=5)
 
         # create publisher for driving commands
         self.publisher_ = self.create_publisher(Twist, 'follow_path_cmd', 1)
-
-        # create timer to periodically invoke the driving logic
-        #timer_period = 0.1  # seconds
-        #self.my_timer = self.create_timer(timer_period, self.timer_callback)
 
     # handling received image data
     def cam_callback(self, data):
@@ -67,14 +64,14 @@ class followPathNode(rclpy.node.Node):
 
             # send message
             self.publisher_.publish(msg)
-
+    
     def analyse_image(self, image):
         canny_low = self.get_parameter('canny_low').get_parameter_value().integer_value
         canny_high = self.get_parameter('canny_high').get_parameter_value().integer_value
 
         threshold = self.get_parameter('threshold').get_parameter_value().integer_value
-        minLineLength = self.get_parameter('minLineLength').get_parameter_value().integer_value
-        maxLineGap = self.get_parameter('maxLineGap').get_parameter_value().integer_value
+        min_line_length = self.get_parameter('min_line_length').get_parameter_value().integer_value
+        max_line_gap = self.get_parameter('max_line_gap').get_parameter_value().integer_value
 
         # convert message to opencv image
         img_cv = self.bridge.compressed_imgmsg_to_cv2(image, desired_encoding = 'passthrough')
@@ -83,6 +80,7 @@ class followPathNode(rclpy.node.Node):
         height, width = img_cv.shape[:2]
         cut_img = img_cv[height-height//2:height, 0:width]
 
+        # warp image to birds eye view
         birds_eye_view = get_birds_eye_view(cut_img)
 
         # use cv2 edge detection
@@ -91,12 +89,12 @@ class followPathNode(rclpy.node.Node):
         edged2color = cv2.cvtColor(edged, cv2.COLOR_GRAY2BGR)
 
         # apply hough lines algorithm
-        lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, minLineLength=minLineLength, maxLineGap=maxLineGap))
+        lines = unpack_lines(cv2.HoughLinesP(edged, rho=2, theta=np.pi/180, threshold=threshold, min_line_length=min_line_length, max_line_gap=max_line_gap))
         visual_lines = display_lines(edged2color, lines)
         lines_img = cv2.addWeighted(edged2color, 0.8, visual_lines, 1, 10)
 
         # filter out line the do not belong to lanes
-        filtered_lines = filter_lines(lines)
+        filtered_lines = filter_lines(self, lines)
         display_filtered_lines = display_lines(edged2color, filtered_lines, (255, 0, 0))
         lanes = cv2.addWeighted(edged2color, 0.8, display_filtered_lines, 1, 10)
 
@@ -118,9 +116,7 @@ class followPathNode(rclpy.node.Node):
         return calculate_steering(middle, edged.shape[1])
 
 
-
 def get_birds_eye_view(image):
-    #TODO: optimise, takes more than half of the runtime
     padding = np.zeros_like(image)
     blank = np.concatenate((padding, padding, padding), axis=1)
     with_image = np.concatenate((padding, image, padding), axis=1)
@@ -132,6 +128,7 @@ def get_birds_eye_view(image):
     offset_bottom = 110
     offset_top = 40
 
+    # map lane-trapezoid back to rectangle
     src = np.float32([[1230+offset_bottom, 480],  [750-offset_bottom, 480], [920-offset_top, 320], [1060+offset_top, 320]]) # The source points
     dst = np.float32([[third*2, height], [third, height], [third, 0], [third*2, 0]]) # The destination points
     transformation_matrix = cv2.getPerspectiveTransform(src, dst) # The transformation matrix
@@ -143,28 +140,20 @@ def get_birds_eye_view(image):
 
     return cut_warped
 
-def filter_parking(lines):
-    result = []
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line
-            if (not x1 == x2) and (not y1 == y2):
-                slope, y_int = np.polyfit((x1, x2), (y1, y2), 1)
-                if -1 < slope < 0:
-                    result.append(line)
-
-    return np.array(result)
-
-
 def remove_image_edges(image):
+    # warping to birds eye view and then applying houghlines finds the edges of the original image
+    # we remove them to improve line filtering performance
     height, width = image.shape[:2]
     left_area = np.array([[0, 130], [0, 205], [150, height], [190, height]], np.int32)
     right_area = np.array([[width, 70], [width, 100], [740, height], [755, height]], np.int32)
-
+    
     mask = cv2.fillPoly(image, [left_area, right_area], 0)
     return mask
 
 def unpack_lines(lines):
+    # houghlines returns a list of lines in the form of [[[x1, y1, x2, y2]], ...]
+    # probably because it was designed with detecting other shapes in mind which need more lines
+    # we remove the unecessary nesting
     unpacked = []
 
     if lines is not None:
@@ -172,52 +161,61 @@ def unpack_lines(lines):
             unpacked.append(line[0])
     return unpacked
 
-def filter_lines(lines):
+def correct_line(line):
+    x1, y1, x2, y2 = line
+
+    # correct for vertical lines
+    if x1 == x2:
+        x1, x2 = x1 - 1, x2 + 1
+    if y1 == y2:
+        y1, y2 = y1 - 1, y2 + 1
+
+    return (x1, y1, x2, y2)
+
+def filter_lines(self, lines):
+    # the big magic of this node
     result = []
-    start = time.time_ns()
     if lines is not None:
 
         line_data = []
 
+        # create auxiliary data for each line and filter out lines that are definitely not lanes
         for line in lines:
-            x1, y1, x2, y2 = line
-
-            # correct for vertical lines
-            if x1 == x2:
-                x1, x2 = x1 - 1, x2 + 1
-            if y1 == y2:
-                y1, y2 = y1 - 1, y2 + 1
-
-            angle = line_angle(line)
+            # correct line to avoid division by zero
+            line = correct_line(line)
 
             # filter out lines that are too flat
+            angle = line_angle(line)
             if angle < 45:
                 continue
 
+            # calculate linear function
+            x1, y1, x2, y2  = line
             slope = (y2-y1) / (x2-x1)
             y_int = y1 - slope * x1
 
             line_data.append((line, (slope, y_int), angle))
 
+        # filter using auxiliary data
         for data in line_data:
             line = data[0]
             slope1, y_int1 = data[1]
 
             middle = get_middle_point(line)
 
-            # get norm of line
+            # create "norm line" that is perpendicular to the line and passes through the middle point
             norm_slope = -1 / slope1
             norm_y_int = middle[1] - norm_slope * middle[0]
 
-            # calculate intersection of norm with other lines
+            # loop through all other lines to find possible partners
             for data2 in line_data:
                 slope2, y_int2 = data2[1]
 
-                # calculate intersection
+                # calculate intersection of line2 and norm line
                 if (slope1 != slope2) and (abs(slope2 - norm_slope) > 0.0001):  # avoid division by zero
                     x = int((norm_y_int - y_int2) / (slope2 - norm_slope))
                     y = int(norm_slope * x + norm_y_int)
-
+                    
                     distance = np.linalg.norm([x - middle[0], y - middle[1]])
 
                     angle_diff = abs(data[2] - data2[2])
@@ -226,30 +224,33 @@ def filter_lines(lines):
                     if 22 < distance < 28 and angle_diff < 5:
                         result.append(line)
                         result.append(data2[0])
-
+    
     result = np.unique(np.array(result), axis=0)
     return result
 
 def calculate_steering(middle_line, image_width):
-    # Left x: 263 Right x: 710
-    # Image width: 960 Half width: 480 Calculated middle: 486
-    # links positiv, rechts negativ
     if len(middle_line) == 0:
+        # no steering information if no lane is found
         return 0.0
     else:
+        # angle to follow turns
         angle = line_angle(middle_line) - 90
-
+        
+        # offset to drive in the middle of the lane
         offset = image_width // 2 - get_middle_point(middle_line)[0]
 
-        return (angle + offset) / 25
+        return (angle + offset) / 20
 
 def get_middle_point(line):
-    x1, y1, x2, y2 = line
+    # calculate the middle point of a line
+    x1, y1, x2, y2 = line 
     x_middle = (x1 + x2) // 2
     y_middle = (y1 + y2) // 2
     return (x_middle, y_middle)
 
 def display_lines(image, lines, color=None):
+    # draws lines into a blank image with the same shape as the input image
+
     lines_image = np.zeros_like(image)
     random_color = (color == None)
     if lines is not None:
@@ -257,56 +258,51 @@ def display_lines(image, lines, color=None):
             if (len(line) > 0):
                 if random_color:
                     color = (randrange(25)*10, randrange(25)*10, randrange(25)*10)
-                x1, y1, x2, y2 = line
+                x1, y1, x2, y2 = line 
                 cv2.line(lines_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
 
     return lines_image
-
+    
 def average(self, image, lines):
-    #TODO: optimise, polyfit takes long
+    # averages the lines to get a single line for each side of the lane
     left = []
     right = []
     height, width = image.shape[:2]
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line
-            if (not x1 == x2) and (not y1 == y2):
-                parameters = np.polyfit((x1, x2), (y1, y2), 1)
-                slope = parameters[0]
-                y_int = parameters[1]
-                middle = get_middle_point(line)
 
-                if middle[0] < width//2:
-                    left.append((slope, y_int))
-                else:
-                    right.append((slope, y_int))
+    if lines is None:
+        return [], [], []
 
+    # sort lines into left and right
+    for line in lines:
+        middle = get_middle_point(line)
 
+        if middle[0] < width//2:
+            left.append(line)
+        else:
+            right.append(line)
+
+    # average left and right lines
     left_line = []
     if len(left) > 0:
-        left_avg = np.average(left, axis=0)
+        left_line = np.average(left, axis=0)
 
         if len(self.last_left) > 0:
             last_avg = np.average(self.last_left, axis=0)
-            left_avg = np.average([left_avg, last_avg], axis=0)
-
-        left_line = make_points(image, left_avg)
-        self.last_left.append(left_avg)
-
-
+            left_line = np.average([left_line, last_avg], axis=0)
+        self.last_left.append(left_line)
+   
     right_line = []
     if len(right) > 0:
-        right_avg = np.average(right, axis=0)
+        right_line = np.average(right, axis=0)
 
         if len(self.last_right) > 0:
             last_avg = np.average(self.last_right, axis=0)
-            right_avg = np.average([right_avg, last_avg], axis=0)
-
-        right_line = make_points(image, right_avg)
-        self.last_right.append(right_avg)
-
+            right_line = np.average([right_line, last_avg], axis=0)
+        self.last_right.append(right_line)
+    
+    # create middle line from either average of left and right or from offsetting one of them if the other is empty
     middle_line = []
-    offset = 235
+    offset = 200
     if len(left_line) == len(right_line) == 0:
         pass
     elif len(left_line) == 0:
@@ -320,37 +316,29 @@ def average(self, image, lines):
     else :
         middle_line = np.average([right_line, left_line], axis=0)
 
+    if len(middle_line) > 0:
+        self.last_middle.append(middle_line)
+
     return left_line, right_line, middle_line
 
-def make_points(image, line):
-    slope, y_int = line
-    if not (abs(slope) < 0.00001):
-        y1 = image.shape[0]
-        y2 = 0
-        x1 = int((y1 - y_int) // slope)
-        x2 = int((y2 - y_int) // slope)
-        return [x1, y1, x2, y2]
-    else:
-        return []
-
 def line_angle(line):
+    # calculate the angle of a line in degrees relativ to the x-axis
     x1, y1, x2, y2 = line
     dx = x2 - x1
     dy = y2 - y1
-    vector = np.array([dx, dy])
 
-    return vector_angle(vector, np.array([1, 0]))
+    v1 = np.array([dx, dy])
+    v2 = np.array([1, 0])
 
-def vector_angle(v1, v2):
     unit_v1 = v1 / np.linalg.norm(v1)
     unit_v2 = v2 / np.linalg.norm(v2)
 
     angle = np.arccos(np.clip(np.dot(unit_v1, unit_v2), -1.0, 1.0))
     return np.rad2deg(angle)
-
+    
 
 def main(args=None):
-    spinUntilKeyboardInterrupt(args, followPathNode)
+    spin_until_keyboard_interrupt(args, followPathNode)
 
 
 if __name__ == '__main__':
