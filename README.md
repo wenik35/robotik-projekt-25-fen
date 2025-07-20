@@ -2,9 +2,9 @@
 
 "turtlebot_pastry" (PArtial Self TRYving) ist ein Package für ROS2 Humble, mit dem ein turtlebot einen Straßenparkour bewältigen soll. Der Turtlebot (Modell Hamburger) ist mit LIDAR-Scanner auf dem Kopf und einer 640p Kamera ausgestattet. Der Parkour enthält unter anderem Straßenzüge, Hindernisse, Ampeln und Kreuzungen.
 
-Näheres zu den Anforderungen ist in den [Milestones]("/milestones") festgehalten.
+Näheres zu den Anforderungen ist in den [Milestones]("https://github.com/wenik35/robotik-projekt-25-fen/milestones?state=closed") festgehalten.
 
-Eine genauere Erklärung aller Nodes ist im [Wiki]("/wiki") zu finden.
+Eine genauere Erklärung aller Nodes ist im [Wiki]("https://github.com/wenik35/robotik-projekt-25-fen/wiki") zu finden.
 
 ---
 
